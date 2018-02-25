@@ -4,6 +4,7 @@
 #include <iterator>
 #include <exception>
 #include <memory>
+#include <iostream>
 
 namespace Afina {
 namespace Backend {
@@ -16,13 +17,13 @@ class List
 		{
 			T value;
 
-			EntryPtr next;
-			EntryPtr previous;
+			Entry* next;
+			Entry* previous;
 
-			Entry(const T& value, EntryPtr next, EntryPtr previous);
+			Entry(const T& value, Entry* next, Entry* previous);
 		};
 
-		using EntryPtr = std::shared_ptr<Entry>;
+		using EntryPtr = Entry*;
 
 	public:
 		class const_iterator : public std::iterator<std::bidirectional_iterator_tag, T>
@@ -32,10 +33,10 @@ class List
 
 			protected:
 				explicit const_iterator(EntryPtr entry);
-				friend List<T>::_CreateConstIterator(EntryPtr);
+				friend const_iterator List<T>::_CreateConstIterator(EntryPtr);
 
 				//For list operations
-				friend List<T>::_GetEntryFromIterator(const_iterator);
+				friend EntryPtr List<T>::_GetEntryFromIterator(const_iterator);
 
 			public:
 				const T& operator*() const;
@@ -53,9 +54,9 @@ class List
 		{
 			protected:
 				explicit iterator(EntryPtr entry);
-				friend List<T>::_CreateIterator(EntryPtr);
+				friend iterator List<T>::_CreateIterator(EntryPtr);
 				explicit iterator(const_iterator it);
-				friend List<T>::remove_constness(const_iterator);
+				friend iterator List<T>::remove_constness(const_iterator);
 
 			public:
 				T& operator*();
@@ -67,8 +68,8 @@ class List
 		};
 
 	private:
-		Entry* _head;
-		Entry* _tail;
+		EntryPtr _head;
+		EntryPtr _tail;
 
 	private:
 		iterator _CreateIterator(EntryPtr entry);
@@ -89,18 +90,30 @@ class List
 		void to_head(const_iterator it);
 		void remove(const_iterator it);
 
+		bool is_empty() const;
+
 		iterator remove_constness(const_iterator it);
 
 		iterator begin();
 		iterator end();
-		const_iterator cbegin() const;
-		const_iterator cend() const;
+		const_iterator cbegin();
+		const_iterator cend();
+
+		//"reverse" iterators. Not rbegin, because ++ means normal direction (oposite to STL)
+		iterator rstart();
+		iterator rfinish();
+		const_iterator rcstart();
+		const_iterator rcfinish();
+
+
+		void PrintList();
 };
 
 // Add definitions
-#include "List.hpp"
 
 }
 }
 
 #endif // AFINA_STORAGE_LIST_H
+
+#include "List.hpp"

@@ -5,6 +5,9 @@
 #include <mutex>
 #include <string>
 #include <functional>
+#include <memory>
+#include <iostream>
+#include <limits>
 
 #include <afina/Storage.h>
 #include "List.h"
@@ -17,6 +20,28 @@ namespace Backend {
  *
  *
  */
+
+class StringPointerWrapper {
+	private:
+		const std::string* _str;
+
+	public:
+		class Hash {
+			public:
+				size_t operator() (const StringPointerWrapper& str) const
+				{
+					return std::hash<std::string>{}(*str._str);
+				}
+		};
+
+	public:
+		StringPointerWrapper(const std::string& str) : _str(&str) {}
+
+		const std::string& operator*() const { return *_str; }
+		bool operator<  (const StringPointerWrapper& second) const { return *_str <  *second._str; }
+		bool operator== (const StringPointerWrapper& second) const { return *_str == *second._str; }
+};
+
 class MapBasedGlobalLockImpl : public Afina::Storage {
 private:
 	struct Data
@@ -32,7 +57,8 @@ private:
 	using ListIterator = ListType::iterator;
 
 public:
-	MapBasedGlobalLockImpl(size_t max_size = 1024);
+	//max_size - in bytes, -1 = unlimited
+	MapBasedGlobalLockImpl(size_t max_size = std::numeric_limits<size_t>::max());
 	~MapBasedGlobalLockImpl();
 
     // Implements Afina::Storage interface
@@ -50,12 +76,14 @@ public:
     // Implements Afina::Storage interface
     bool Get(const std::string &key, std::string &value) override;
 
+    void Print();
+
 private:
     size_t _max_size;
 	size_t _current_size;
 	ListType _list;
 
-	std::unordered_map<std::reference_wrapper<const std::string>, ListConstIterator> _backend;
+	std::unordered_map<StringPointerWrapper, ListConstIterator, StringPointerWrapper::Hash> _backend;
 
 	std::recursive_mutex _map_mutex;
 
@@ -68,5 +96,6 @@ private:
 
 } // namespace Backend
 } // namespace Afina
+
 
 #endif // AFINA_STORAGE_MAP_BASED_GLOBAL_LOCK_IMPL_H
