@@ -19,7 +19,9 @@
 
 #include <afina/Storage.h>
 
-#define NETWORK_DEBUG(X) std::cout << "network debug" << X << std::endl
+#define NETWORK_DEBUG(X) std::cout << "network debug: " << X << std::endl
+#define NETWORK_PROCESS_DEBUG(PID, MESSAGE) NETWORK_DEBUG("Process PID = " << PID << ": " << MESSAGE)
+#define NETWORK_PROCESS_MESSAGE(MESSAGE) std::cout << "Process PID = " << pthread_self() << ": " << MESSAGE
 #define LOCK_CONNECTIONS_MUTEX std::lock_guard<std::mutex> lock(connections_mutex)
 
 #define READING_PORTION 1024
@@ -28,26 +30,21 @@ namespace Afina {
 namespace Network {
 namespace Blocking {
 
-//Type for transporting client socket num to funcions
-struct ThreadParams {
-	ServerImpl* server;
-	int parameter;
-};
-
-template <ServerImpl::*function_for_start(int)>
+template <void (ServerImpl::*function_for_start)(int)>
 void *ServerImpl::RunMethodInDifferentThread(void *p) {
+    ThreadParams *params = reinterpret_cast<ThreadParams *>(p);
     try { //! For exceptions in threads !
-		ThreadParams *params = reinterpret_cast<ThreadParams *>(p);
-        params->server->*function_for_start(params->parameter);
+	(params->server->*function_for_start)(params->parameter);
     } catch (std::runtime_error &ex) {
         std::cerr << "Server fails: " << ex.what() << std::endl;
     }
+    delete params;
     return 0;
 }
 
 // See Server.h
 ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) :
-	Server(ps), _server_socket(-1), running(false), max_workers(0), listen_port(0)
+	Server(ps), _server_socket(-1), running(false), _is_finishing(false), max_workers(0), listen_port(0)
 {}
 
 // See Server.h
@@ -105,7 +102,7 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     // since there will only be one server thread, and the program's main thread (the
     // one running main()) could fulfill this purpose.
     running.store(true);
-    if (pthread_create(&accept_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunAcceptor>, {this, 0}) < 0) {
+    if (pthread_create(&accept_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunAcceptor>, new ThreadParams(this, 0)) < 0) {
         throw std::runtime_error("Could not create server thread");
     }
 }
@@ -114,8 +111,9 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
 void ServerImpl::Stop() {
 	NETWORK_DEBUG(__PRETTY_FUNCTION__);
 
-	if (!running.load()) { return; }
-
+	if (!running.load() || _is_finishing.load()) { return; }
+	
+	_is_finishing.store(true);
 	// Shutdown listening socket and all client sockets
 	// sockets will be closed by their threads
 	{
@@ -140,6 +138,7 @@ void ServerImpl::Stop() {
 	pthread_join(accept_thread, 0);
 
 	running.store(false);
+	_is_finishing.store(false);
 	connections_cv.notify_all();
 }
 
@@ -150,7 +149,8 @@ void ServerImpl::Join() {
 
 	while (running.load()) {
 		//mutex will be used only for signaling
-		connections_cv.wait(std::unique_lock<std::mutex>(connections_mutex));
+		std::unique_lock<std::mutex> lock(connections_mutex);
+		connections_cv.wait(lock);
 	}
 }
 
@@ -167,8 +167,7 @@ void ServerImpl::RunAcceptor(int /*socket*/) {
     // };
     //
     // Note we need to convert the port to network order
-
-	sockaddr_in server_addr = {};
+    sockaddr_in server_addr = {};
     std::memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;          // IPv4
     server_addr.sin_port = htons(listen_port); // TCP port number
@@ -216,15 +215,16 @@ void ServerImpl::RunAcceptor(int /*socket*/) {
 	sockaddr_in client_addr = {};
 	std::memset(&client_addr, 0, sizeof(client_addr));
 	socklen_t sinSize = sizeof(sockaddr_in);
-    while (running.load()) {
-        std::cout << "network debug: waiting for connection..." << std::endl;
+    	while (running.load()) {
+        	std::cout << "network debug: waiting for connection..." << std::endl;
 
 		// When an incoming connection arrives, accept it. The call to accept() blocks until
 		// the incoming connection arrives
 		client_socket = accept(_server_socket, (sockaddr *) &client_addr, &sinSize);
 		if (client_socket == -1) {
+			if (_is_finishing.load()) { break; } //No exception is needed
 			close(_server_socket);
-			throw std::runtime_error("Socket accept() failed");
+			throw std::runtime_error("Socket accept() failed.");
 		}
 		NETWORK_DEBUG("Connection accepted from address: 0x" << std::hex << client_addr.sin_addr.s_addr);
 		
@@ -234,6 +234,7 @@ void ServerImpl::RunAcceptor(int /*socket*/) {
 			if (send(client_socket, message.data(), message.size(), 0) <= 0) {
 				close(client_socket); //Closes only client socket
 			}
+			NETWORK_DEBUG("Connection was rejected due to maximal limit: " << max_workers << " connections");
 			continue;
 		}
 
@@ -241,11 +242,11 @@ void ServerImpl::RunAcceptor(int /*socket*/) {
 		{
 			LOCK_CONNECTIONS_MUTEX; //Block mutex for work with connections set
 			
-			pthread_t client_thread;
-			if (pthread_create(&client_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunConnection>, 
-							   {this, client_socket}) < 0)	{
+			pthread_t client_thread = 0;
+                        if (pthread_create(&client_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunConnection>, new ThreadParams(this, client_socket)) < 0)	{
 				throw std::runtime_error("Could not create worker thread");
 			}
+			NETWORK_PROCESS_DEBUG(client_thread, "client thread was started");
 			connections.insert(client_thread);
 			_client_sockets.insert(client_socket);
 		}
@@ -261,41 +262,67 @@ void ServerImpl::RunConnection(int client_socket) {
     // TODO: All connection work is here
 
 	// TODO: Start new thread and process data from/to connection
-	Parser parser;
+	Afina::Protocol::Parser parser;
 	std::string current_data;
 	while (running.load()) {
 		char new_data [READING_PORTION] = "";
 		if (recv(client_socket, new_data, READING_PORTION * sizeof(char), 0) <= 0) { break; }
 		current_data.append(new_data);
-		new_data [0] = '\0';
+		memset(new_data, 0, READING_PORTION*sizeof(char)); //No set '\0' in recv function
 		
-		int parsed = 0;
-		bool was_command = parser.Parse(current_data, &parsed);
+		size_t parsed = 0;
+		bool was_command = false;
+		try {
+			was_command = parser.Parse(current_data, parsed);
+		}
+		catch(std::exception& e) {
+			std::string error_msg = "Parsing error: ";
+			error_msg += e.what();
+			error_msg += "\r\n";
+			send(client_socket, error_msg.c_str(), error_msg.size(), 0);
+			current_data = "";
+			parser.Reset();
+			continue;
+		}
 		current_data = current_data.substr(parsed); //remove command from received data
 		if (!was_command) { continue; } //more data is needed
 		
 		//if command was accepted
 		uint32_t read_for_arg = 0;
-		auto command = parser.Build(&read_for_arg); 
-		read_for_arg += 2; //+2: \r\n (?)
-		if (read_for_arg > current_data.size()) { //we need to read some more for argument
+		auto command = parser.Build(read_for_arg);
+		if (read_for_arg != 0) { read_for_arg += 2; } //\r\n
+		if (read_for_arg > current_data.size()) { //we need to read some more for argument. Not need if no argument is needed
 			if (recv(client_socket, new_data, (read_for_arg) * sizeof(char), MSG_WAITALL) <= 0) {
-				std::cout << "Server hasn't received argument from client before the socket was closed" << std::endl;
+				NETWORK_PROCESS_MESSAGE("Server hasn't received argument from client before the socket was closed");
 				break;
 			}
 			current_data.append(new_data);
 		}
-		std::string argument = current_data.substr(0, read_for_arg-2); // \r\n not needed
-		current_data = current_data.substr(read_for_arg); //remove argument from received data
+		std::string argument;
+		if (read_for_arg > 2) {
+			argument = current_data.substr(0, read_for_arg-2); // \r\n not needed
+			current_data = current_data.substr(read_for_arg); //remove argument from received data
+		}
 
 		std::string out;
-		command.Execute(pStorage, argument, out);
-		if (send(client_socket, out.c_str(), out.size(), 0) <= out.size()) {
-			std::cout << "Server cannot send all data to client" << std::endl;
+		try {
+			command->Execute(*pStorage, argument, out);
+		}
+		catch(std::exception& e) {
+			out = "SERVER ERROR ";
+			out += e.what();
+		}
+		out += "\r\n";
+		size_t len_sended = send(client_socket, out.c_str(), out.size(), 0);
+		if (len_sended < out.size()) {
+			NETWORK_PROCESS_MESSAGE("Server cannot send all data to client");
 			break;
 		}
+
+		parser.Reset();
 	}
-	
+
+	NETWORK_PROCESS_DEBUG(pthread_self(), "Connection to client was closed. Process is goig to finish");	
 	close(client_socket);
 	//Removes this from threads set
 	{

@@ -8,7 +8,8 @@
 #include <unordered_set>
 
 #include <afina/network/Server.h>
-#include <afina/protocol/Parser.h>
+#include "./../../protocol/Parser.h"
+#include <afina/execute/Command.h>
 
 namespace Afina {
 namespace Network {
@@ -32,6 +33,9 @@ public:
     // See Server.h
     void Join() override;
 
+    ServerImpl(const ServerImpl&) = delete;
+    ServerImpl& operator=(const ServerImpl&) = delete;
+
 protected:
     /**
      * Method is running in the connection acceptor thread
@@ -45,17 +49,27 @@ protected:
 	void RunConnection(int client_socket = 0);
 
 private:
-	//Function for pthread_create. pthread_create gets this pointer as parameter
-	//and then this function calls RunAcceptor()/RunConnectionProxy
-	//Template argument - pointer to function-member, that should be started
-	//Additional work: 
-	template <ServerImpl::*function_for_start(int)>
+    //Type for transporting client socket num to funcions
+    struct ThreadParams {
+	ServerImpl* server;
+	int parameter;
+
+	ThreadParams(ServerImpl* srv, int param) : server(srv), parameter(param) {}
+    };
+
+    //Function for pthread_create. pthread_create gets this pointer as parameter
+    //and then this function calls RunAcceptor()/RunConnectionProxy
+    //Template argument - pointer to function-member, that should be started
+    //void* parameter should be ThreadParams structure, created with new (delete will be called by this function) 
+    template <void (ServerImpl::*function_for_start)(int)>
     static void *RunMethodInDifferentThread(void *p);
 
     // Atomic flag to notify threads when it is time to stop. Note that
     // flag must be atomic in order to safely publish changes cross thread
     // bounds
     std::atomic<bool> running;
+    //atomic to differentiate accept() fails
+    std::atomic<bool> _is_finishing;
 
     // Thread that is accepting new connections
     pthread_t accept_thread;
@@ -71,7 +85,7 @@ private:
     // Port to listen for new connections, permits access only from
     // inside of accept_thread
     // Read-only
-	uint16_t listen_port;
+    uint16_t listen_port;
 
     // Mutex used to access connections list
     std::mutex connections_mutex;
