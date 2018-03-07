@@ -19,14 +19,26 @@
 
 #include <afina/Storage.h>
 
+#define NETWORK_DEBUG(X) std::cout << "network debug" << X << std::endl
+#define LOCK_CONNECTIONS_MUTEX std::lock_guard<std::mutex> lock(connections_mutex)
+
+#define READING_PORTION 1024
+
 namespace Afina {
 namespace Network {
 namespace Blocking {
 
-void *ServerImpl::RunAcceptorProxy(void *p) {
-    ServerImpl *srv = reinterpret_cast<ServerImpl *>(p);
-    try {
-        srv->RunAcceptor();
+//Type for transporting client socket num to funcions
+struct ThreadParams {
+	ServerImpl* server;
+	int parameter;
+};
+
+template <ServerImpl::*function_for_start(int)>
+void *ServerImpl::RunMethodInDifferentThread(void *p) {
+    try { //! For exceptions in threads !
+		ThreadParams *params = reinterpret_cast<ThreadParams *>(p);
+        params->server->*function_for_start(params->parameter);
     } catch (std::runtime_error &ex) {
         std::cerr << "Server fails: " << ex.what() << std::endl;
     }
@@ -34,14 +46,25 @@ void *ServerImpl::RunAcceptorProxy(void *p) {
 }
 
 // See Server.h
-ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) : Server(ps) {}
+ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) :
+	Server(ps), _server_socket(-1), running(false), max_workers(0), listen_port(0)
+{}
 
 // See Server.h
-ServerImpl::~ServerImpl() {}
+ServerImpl::~ServerImpl() 
+{
+	//Check if all sockets closed
+	Stop();
+}
 
 // See Server.h
-void ServerImpl::Start(uint32_t port, uint16_t n_workers) {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
+	NETWORK_DEBUG(__PRETTY_FUNCTION__);
+
+	//Check if server was started yet
+	if (running.load() == true) {
+		throw std::runtime_error("Cannot use ServerImpl::Start() if server was started yet!");
+	}
 
     // If a client closes a connection, this will generally produce a SIGPIPE
     // signal that will kill the process. We want to ignore this signal, so send()
@@ -82,26 +105,58 @@ void ServerImpl::Start(uint32_t port, uint16_t n_workers) {
     // since there will only be one server thread, and the program's main thread (the
     // one running main()) could fulfill this purpose.
     running.store(true);
-    if (pthread_create(&accept_thread, NULL, ServerImpl::RunAcceptorProxy, this) < 0) {
+    if (pthread_create(&accept_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunAcceptor>, {this, 0}) < 0) {
         throw std::runtime_error("Could not create server thread");
     }
 }
 
 // See Server.h
 void ServerImpl::Stop() {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    running.store(false);
+	NETWORK_DEBUG(__PRETTY_FUNCTION__);
+
+	if (!running.load()) { return; }
+
+	// Shutdown listening socket and all client sockets
+	// sockets will be closed by their threads
+	{
+		LOCK_CONNECTIONS_MUTEX;
+		for (auto it = _client_sockets.begin(); it != _client_sockets.end(); it++) {
+			shutdown(*it, SHUT_RDWR); 
+		}
+	}
+
+	while (!connections.empty()) {
+		std::unordered_set<pthread_t>::iterator first_thread; //I cannot give a value here
+		{ 
+			LOCK_CONNECTIONS_MUTEX;
+			first_thread = connections.begin();
+			if (first_thread == connections.end()) { break; } //All threads was finished
+		}
+		pthread_join(*first_thread, nullptr); //We don't interesting in errors of join
+	}
+
+	//Stop main thread
+	shutdown(_server_socket, SHUT_RDWR);
+	pthread_join(accept_thread, 0);
+
+	running.store(false);
+	connections_cv.notify_all();
 }
 
 // See Server.h
 void ServerImpl::Join() {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    pthread_join(accept_thread, 0);
+	NETWORK_DEBUG(__PRETTY_FUNCTION__);
+    //pthread_join(accept_thread, 0); - incorrect! Accepted thread can be finished earlyer (e.g., system err.) then thread for connections
+
+	while (running.load()) {
+		//mutex will be used only for signaling
+		connections_cv.wait(std::unique_lock<std::mutex>(connections_mutex));
+	}
 }
 
 // See Server.h
-void ServerImpl::RunAcceptor() {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+void ServerImpl::RunAcceptor(int /*socket*/) {
+	NETWORK_DEBUG(__PRETTY_FUNCTION__);
 
     // For IPv4 we use struct sockaddr_in:
     // struct sockaddr_in {
@@ -113,7 +168,7 @@ void ServerImpl::RunAcceptor() {
     //
     // Note we need to convert the port to network order
 
-    struct sockaddr_in server_addr;
+	sockaddr_in server_addr = {};
     std::memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;          // IPv4
     server_addr.sin_port = htons(listen_port); // TCP port number
@@ -123,8 +178,8 @@ void ServerImpl::RunAcceptor() {
     // - Family: IPv4
     // - Type: Full-duplex stream (reliable)
     // - Protocol: TCP
-    int server_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (server_socket == -1) {
+    _server_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (_server_socket == -1) {
         throw std::runtime_error("Failed to open socket");
     }
 
@@ -136,60 +191,118 @@ void ServerImpl::RunAcceptor() {
     // same port. In a such case kernel will balance input traffic between all listeners (except those who
     // are closed already)
     int opts = 1;
-    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opts, sizeof(opts)) == -1) {
-        close(server_socket);
+    if (setsockopt(_server_socket, SOL_SOCKET, SO_REUSEADDR, &opts, sizeof(opts)) == -1) {
+        close(_server_socket);
         throw std::runtime_error("Socket setsockopt() failed");
     }
 
     // Bind the socket to the address. In other words let kernel know data for what address we'd
     // like to see in the socket
-    if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-        close(server_socket);
+    if (bind(_server_socket, (sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+        close(_server_socket);
         throw std::runtime_error("Socket bind() failed");
     }
 
     // Start listening. The second parameter is the "backlog", or the maximum number of
-    // connections that we'll allow to queue up. Note that listen() doesn't block until
-    // incoming connections arrive. It just makesthe OS aware that this process is willing
+    // connections that we'll allow to queue up. Note that listen() (!)doesn't block until
+    // incoming connections arrive. It just makes the OS aware that this process is willing
     // to accept connections on this socket (which is bound to a specific IP and port)
-    if (listen(server_socket, 5) == -1) {
-        close(server_socket);
+    if (listen(_server_socket, _max_listen) == -1) {
+        close(_server_socket);
         throw std::runtime_error("Socket listen() failed");
     }
 
-    int client_socket;
-    struct sockaddr_in client_addr;
-    socklen_t sinSize = sizeof(struct sockaddr_in);
+	int client_socket = -1;
+	sockaddr_in client_addr = {};
+	std::memset(&client_addr, 0, sizeof(client_addr));
+	socklen_t sinSize = sizeof(sockaddr_in);
     while (running.load()) {
         std::cout << "network debug: waiting for connection..." << std::endl;
 
-        // When an incoming connection arrives, accept it. The call to accept() blocks until
-        // the incoming connection arrives
-        if ((client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &sinSize)) == -1) {
-            close(server_socket);
-            throw std::runtime_error("Socket accept() failed");
-        }
+		// When an incoming connection arrives, accept it. The call to accept() blocks until
+		// the incoming connection arrives
+		client_socket = accept(_server_socket, (sockaddr *) &client_addr, &sinSize);
+		if (client_socket == -1) {
+			close(_server_socket);
+			throw std::runtime_error("Socket accept() failed");
+		}
+		NETWORK_DEBUG("Connection accepted from address: 0x" << std::hex << client_addr.sin_addr.s_addr);
+		
+		//Check limit
+		if (connections.size() >= max_workers) {
+			std::string message = "SERVER_ERROR Max limit of workers was achieved\r\n";
+			if (send(client_socket, message.data(), message.size(), 0) <= 0) {
+				close(client_socket); //Closes only client socket
+			}
+			continue;
+		}
 
-        // TODO: Start new thread and process data from/to connection
-        {
-            std::string msg = "TODO: start new thread and process memcached protocol instead";
-            if (send(client_socket, msg.data(), msg.size(), 0) <= 0) {
-                close(client_socket);
-                close(server_socket);
-                throw std::runtime_error("Socket send() failed");
-            }
-            close(client_socket);
-        }
+		//Creating a new thread
+		{
+			LOCK_CONNECTIONS_MUTEX; //Block mutex for work with connections set
+			
+			pthread_t client_thread;
+			if (pthread_create(&client_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunConnection>, 
+							   {this, client_socket}) < 0)	{
+				throw std::runtime_error("Could not create worker thread");
+			}
+			connections.insert(client_thread);
+			_client_sockets.insert(client_socket);
+		}
     }
 
     // Cleanup on exit...
-    close(server_socket);
+    close(_server_socket);
 }
 
 // See Server.h
-void ServerImpl::RunConnection() {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+void ServerImpl::RunConnection(int client_socket) {
+	NETWORK_DEBUG(__PRETTY_FUNCTION__);
     // TODO: All connection work is here
+
+	// TODO: Start new thread and process data from/to connection
+	Parser parser;
+	std::string current_data;
+	while (running.load()) {
+		char new_data [READING_PORTION] = "";
+		if (recv(client_socket, new_data, READING_PORTION * sizeof(char), 0) <= 0) { break; }
+		current_data.append(new_data);
+		new_data [0] = '\0';
+		
+		int parsed = 0;
+		bool was_command = parser.Parse(current_data, &parsed);
+		current_data = current_data.substr(parsed); //remove command from received data
+		if (!was_command) { continue; } //more data is needed
+		
+		//if command was accepted
+		uint32_t read_for_arg = 0;
+		auto command = parser.Build(&read_for_arg); 
+		read_for_arg += 2; //+2: \r\n (?)
+		if (read_for_arg > current_data.size()) { //we need to read some more for argument
+			if (recv(client_socket, new_data, (read_for_arg) * sizeof(char), MSG_WAITALL) <= 0) {
+				std::cout << "Server hasn't received argument from client before the socket was closed" << std::endl;
+				break;
+			}
+			current_data.append(new_data);
+		}
+		std::string argument = current_data.substr(0, read_for_arg-2); // \r\n not needed
+		current_data = current_data.substr(read_for_arg); //remove argument from received data
+
+		std::string out;
+		command.Execute(pStorage, argument, out);
+		if (send(client_socket, out.c_str(), out.size(), 0) <= out.size()) {
+			std::cout << "Server cannot send all data to client" << std::endl;
+			break;
+		}
+	}
+	
+	close(client_socket);
+	//Removes this from threads set
+	{
+		LOCK_CONNECTIONS_MUTEX;
+		connections.erase(connections.find(pthread_self()));
+		_client_sockets.erase(_client_sockets.find(client_socket));
+	}
 }
 
 } // namespace Blocking
