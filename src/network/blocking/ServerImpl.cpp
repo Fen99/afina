@@ -89,12 +89,12 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     // Note that, in this particular example, creating a "server thread" is redundant,
     // since there will only be one server thread, and the program's main thread (the
     // one running main()) could fulfill this purpose.
+    _thread_pool.Start(0, n_workers);
+    
     running.store(true);
     if (pthread_create(&accept_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunAcceptor>, new ThreadParams(this, 0)) < 0) {
         throw std::runtime_error("Could not create server thread");
     }
-
-	_thread_pool.Start(0, n_workers);
 }
 
 // See Server.h
@@ -112,8 +112,9 @@ void ServerImpl::Stop() {
 			shutdown(*it, SHUT_RDWR); 
 		}
 	}
-
 	_thread_pool.Stop(true);
+
+	shutdown(_server_socket, SHUT_RDWR);
 	pthread_join(accept_thread, 0);
 
 	running.store(false);
@@ -294,13 +295,13 @@ void ServerImpl::RunConnection(int client_socket) {
 		parser.Reset();
 	}
 
-	NETWORK_PROCESS_DEBUG(pthread_self(), "Connection to client was closed. Process is goig to finish");	
 	close(client_socket);
 	//Removes this client from list
 	{
 		LOCK_CONNECTIONS_MUTEX;
 		_client_sockets.erase(_client_sockets.find(client_socket));
 	}
+	NETWORK_PROCESS_DEBUG(pthread_self(), "Connection to client was closed");	
 }
 
 } // namespace Blocking

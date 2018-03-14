@@ -61,14 +61,14 @@ public:
 	{
 		// Prepare "task"
 		auto exec = std::bind(std::forward<F>(func), std::forward<Types>(args)...);
-		if (state.load() != State::kRun) {	return false; }
+		if (state.load() != State::kRun) { return false; }
 
-		std::unique_lock<std::mutex> lock(this->mutex);
+		std::unique_lock<std::mutex> lock(threadpool_mutex);
 		// Enqueue new task
 		if (tasks.size() >= _max_queue_size) { return false; } //Cannot create new task
 		tasks.push_back(exec);
 		if (_count_free_threads.load() == 0 && threads.size() < _hight_watermark) {
-			_StartThread(false);
+   		    _StartThread(false); 
 		}
 
 		empty_condition.notify_one();

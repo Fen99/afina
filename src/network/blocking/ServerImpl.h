@@ -6,6 +6,7 @@
 #include <mutex>
 #include <pthread.h>
 #include <unordered_set>
+#include <iostream>
 
 #include <afina/network/Server.h>
 #include "./../../protocol/Parser.h"
@@ -50,8 +51,7 @@ protected:
 	void RunConnection(int client_socket = 0);
 
 private:
-    //Type for transporting client socket num to funcions
-    struct ThreadParams {
+   struct ThreadParams {
 	ServerImpl* server;
 	int parameter;
 
@@ -78,7 +78,7 @@ private:
 		return 0;
 	}
 
-
+    //Type for transporting client socket num to funcions
     // Atomic flag to notify threads when it is time to stop. Note that
     // flag must be atomic in order to safely publish changes cross thread
     // bounds
