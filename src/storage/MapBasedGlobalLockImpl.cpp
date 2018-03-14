@@ -3,7 +3,7 @@
 #include <mutex>
 #include <iostream>
 
-#define LOCK_MAP_MUTEX std::lock_guard<std::recursive_mutex> lock(_map_mutex)
+#define LOCK_MAP_MUTEX std::lock_guard<std::recursive_mutex> __lock(_map_mutex)
 
 namespace Afina {
 namespace Backend {
@@ -31,10 +31,10 @@ void MapBasedGlobalLockImpl::_DeleteToSize(size_t size)
 
 bool MapBasedGlobalLockImpl::_Insert(const std::string &key, const std::string &value, bool need_replace)
 {
-	LOCK_MAP_MUTEX;
-
 	Data new_element = {key, value};
 	if (new_element.GetSize() > _max_size) { return false; }
+
+	LOCK_MAP_MUTEX;
 
 	auto position = _backend.find(key);
 	if (position == _backend.end())
@@ -69,13 +69,13 @@ bool MapBasedGlobalLockImpl::PutIfAbsent(const std::string &key, const std::stri
 // See MapBasedGlobalLockImpl.h
 bool MapBasedGlobalLockImpl::Set(const std::string &key, const std::string &value)
 { 
+	Data new_element = {key, value};
+	if (new_element.GetSize() > _max_size) { return false; }
+
 	LOCK_MAP_MUTEX;
 
 	auto position = _backend.find(key);
 	if (position == _backend.end()) { return false; }
-
-	Data new_element = {key, value};
-	if (new_element.GetSize() > _max_size) { return false; }
 
 	int delta = (int) (new_element.GetSize() - (*(position->second)).GetSize());
 	if (delta > _max_size - _current_size) { _DeleteToSize(_max_size - delta); }

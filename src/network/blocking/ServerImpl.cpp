@@ -22,29 +22,18 @@
 #define NETWORK_DEBUG(X) std::cout << "network debug: " << X << std::endl
 #define NETWORK_PROCESS_DEBUG(PID, MESSAGE) NETWORK_DEBUG("Process PID = " << PID << ": " << MESSAGE)
 #define NETWORK_PROCESS_MESSAGE(MESSAGE) std::cout << "Process PID = " << pthread_self() << ": " << MESSAGE
-#define LOCK_CONNECTIONS_MUTEX std::lock_guard<std::mutex> lock(connections_mutex)
 
-#define READING_PORTION 1024
+#define LOCK_CONNECTIONS_MUTEX std::lock_guard<std::mutex> __lock(connections_mutex)
+
+const int reading_portion_g = 1024;
 
 namespace Afina {
 namespace Network {
 namespace Blocking {
 
-template <void (ServerImpl::*function_for_start)(int)>
-void *ServerImpl::RunMethodInDifferentThread(void *p) {
-    ThreadParams *params = reinterpret_cast<ThreadParams *>(p);
-    try { //! For exceptions in threads !
-	(params->server->*function_for_start)(params->parameter);
-    } catch (std::runtime_error &ex) {
-        std::cerr << "Server fails: " << ex.what() << std::endl;
-    }
-    delete params;
-    return 0;
-}
-
 // See Server.h
 ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) :
-	Server(ps), _server_socket(-1), running(false), _is_finishing(false), max_workers(0), listen_port(0)
+	Server(ps), _server_socket(-1), running(false), _is_finishing(false), listen_port(0), _thread_pool()
 {}
 
 // See Server.h
@@ -75,7 +64,6 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
 
     // Setup server parameters BEFORE thread created, that will guarantee
     // variable value visibility
-    max_workers = n_workers;
     listen_port = port;
 
     // The pthread_create function creates a new thread.
@@ -105,6 +93,8 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     if (pthread_create(&accept_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunAcceptor>, new ThreadParams(this, 0)) < 0) {
         throw std::runtime_error("Could not create server thread");
     }
+
+	_thread_pool.Start(0, n_workers);
 }
 
 // See Server.h
@@ -123,18 +113,7 @@ void ServerImpl::Stop() {
 		}
 	}
 
-	while (!connections.empty()) {
-		std::unordered_set<pthread_t>::iterator first_thread; //I cannot give a value here
-		{ 
-			LOCK_CONNECTIONS_MUTEX;
-			first_thread = connections.begin();
-			if (first_thread == connections.end()) { break; } //All threads was finished
-		}
-		pthread_join(*first_thread, nullptr); //We don't interesting in errors of join
-	}
-
-	//Stop main thread
-	shutdown(_server_socket, SHUT_RDWR);
+	_thread_pool.Stop(true);
 	pthread_join(accept_thread, 0);
 
 	running.store(false);
@@ -229,25 +208,18 @@ void ServerImpl::RunAcceptor(int /*socket*/) {
 		NETWORK_DEBUG("Connection accepted from address: 0x" << std::hex << client_addr.sin_addr.s_addr);
 		
 		//Check limit
-		if (connections.size() >= max_workers) {
-			std::string message = "SERVER_ERROR Max limit of workers was achieved\r\n";
-			if (send(client_socket, message.data(), message.size(), 0) <= 0) {
-				close(client_socket); //Closes only client socket
-			}
-			NETWORK_DEBUG("Connection was rejected due to maximal limit: " << max_workers << " connections");
-			continue;
-		}
 
-		//Creating a new thread
 		{
-			LOCK_CONNECTIONS_MUTEX; //Block mutex for work with connections set
-			
-			pthread_t client_thread = 0;
-                        if (pthread_create(&client_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunConnection>, new ThreadParams(this, client_socket)) < 0)	{
-				throw std::runtime_error("Could not create worker thread");
+			//Block mutex for work with connections set (_thread_pool.Execute starts a function immediatly, but _client_sockets.insert should be performed
+			LOCK_CONNECTIONS_MUTEX; 
+			if (!_thread_pool.Execute(&ServerImpl::RunConnection, this, client_socket)) {
+				std::string message = "SERVER_ERROR Server is buisy an cannot accept a new client\r\n";
+				if (send(client_socket, message.data(), message.size(), 0) <= 0) {
+					close(client_socket); //Closes only client socket
+				}
+				NETWORK_DEBUG("Connection was rejected due to _thread_pool.Execute = false");
+				continue;
 			}
-			NETWORK_PROCESS_DEBUG(client_thread, "client thread was started");
-			connections.insert(client_thread);
 			_client_sockets.insert(client_socket);
 		}
     }
@@ -265,10 +237,10 @@ void ServerImpl::RunConnection(int client_socket) {
 	Afina::Protocol::Parser parser;
 	std::string current_data;
 	while (running.load()) {
-		char new_data [READING_PORTION] = "";
-		if (recv(client_socket, new_data, READING_PORTION * sizeof(char), 0) <= 0) { break; }
+		char new_data [reading_portion_g] = "";
+		if (recv(client_socket, new_data, reading_portion_g * sizeof(char), 0) <= 0) { break; }
 		current_data.append(new_data);
-		memset(new_data, 0, READING_PORTION*sizeof(char)); //No set '\0' in recv function
+		memset(new_data, 0, reading_portion_g *sizeof(char)); //No set '\0' in recv function
 		
 		size_t parsed = 0;
 		bool was_command = false;
@@ -324,10 +296,9 @@ void ServerImpl::RunConnection(int client_socket) {
 
 	NETWORK_PROCESS_DEBUG(pthread_self(), "Connection to client was closed. Process is goig to finish");	
 	close(client_socket);
-	//Removes this from threads set
+	//Removes this client from list
 	{
 		LOCK_CONNECTIONS_MUTEX;
-		connections.erase(connections.find(pthread_self()));
 		_client_sockets.erase(_client_sockets.find(client_socket));
 	}
 }

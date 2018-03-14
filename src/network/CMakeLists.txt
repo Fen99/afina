@@ -11,4 +11,4 @@ set(SOURCE_FILES
 )
 
 add_library(Network ${SOURCE_FILES})
-target_link_libraries(Network pthread uv Protocol Execute ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(Network pthread uv Protocol Execute ThreadPool ${CMAKE_THREAD_LIBS_INIT})
