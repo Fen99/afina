@@ -19,10 +19,6 @@
 
 #include <afina/Storage.h>
 
-#define NETWORK_DEBUG(X) std::cout << "network debug: " << X << std::endl
-#define NETWORK_PROCESS_DEBUG(PID, MESSAGE) NETWORK_DEBUG("Process PID = " << PID << ": " << MESSAGE)
-#define NETWORK_PROCESS_MESSAGE(MESSAGE) std::cout << "Process PID = " << pthread_self() << ": " << MESSAGE
-
 #define LOCK_CONNECTIONS_MUTEX std::lock_guard<std::mutex> __lock(connections_mutex)
 
 const int reading_portion_g = 1024;
@@ -92,7 +88,7 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     _thread_pool.Start(0, n_workers);
     
     running.store(true);
-    if (pthread_create(&accept_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunAcceptor>, new ThreadParams(this, 0)) < 0) {
+    if (pthread_create(&accept_thread, NULL, ServerImpl::RunMethodInDifferentThread<&ServerImpl::RunAcceptor>, this) < 0) {
         throw std::runtime_error("Could not create server thread");
     }
 }
@@ -135,7 +131,7 @@ void ServerImpl::Join() {
 }
 
 // See Server.h
-void ServerImpl::RunAcceptor(int /*socket*/) {
+void ServerImpl::RunAcceptor() {
 	NETWORK_DEBUG(__PRETTY_FUNCTION__);
 
     // For IPv4 we use struct sockaddr_in:

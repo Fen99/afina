@@ -4,9 +4,6 @@
 
 //#define LOCK_THREADPOOL_MUTEX std::unique_lock<std::mutex> __lock(threadpool_mutex)
 
-#define THREADPOOL_DEBUG(X) std::cout << "ThreadPool debug: " << X << std::endl
-#define THREADPOOL_PROCESS_DEBUG(MESSAGE) THREADPOOL_DEBUG("Threadpool process PID = " << std::this_thread::get_id() << ": " << MESSAGE)
-
 namespace Afina {
 namespace Core {
 
@@ -50,12 +47,16 @@ void ThreadPool::_ExecuteTasks() {
 		++_count_free_threads;
 		if (_idle_time != 0) {
 			auto status = empty_condition.wait_for(lock, std::chrono::milliseconds(_idle_time));
-			if (status == std::cv_status::timeout) { break; } //No need wait more
+			if (status == std::cv_status::timeout) //No need wait more
+			{ 
+				--_count_free_threads;
+				break; 
+			}
 		}
 		else {
 			empty_condition.wait(lock);
 		}
-	        --_count_free_threads; //Waiting was finished
+	    --_count_free_threads; //Waiting was finished
 	}
 
 	//Extract the new tasks

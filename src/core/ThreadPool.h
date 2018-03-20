@@ -11,6 +11,8 @@
 #include <atomic>
 #include <unordered_map>
 
+#include "Debug.h"
+
 namespace Afina {
 namespace Core {
 
