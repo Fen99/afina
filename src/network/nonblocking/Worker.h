@@ -2,7 +2,21 @@
 #define AFINA_NETWORK_NONBLOCKING_WORKER_H
 
 #include <memory>
-#include <pthread.h>
+#include <thread>
+#include <atomic>
+#include <unordered_map>
+#include <exception>
+#include <utility>
+
+#include <signal.h>
+#include <sys/epoll.h>
+#include <sys/types.h>
+#include <errno.h>
+
+#include "./../../core/Debug.h"
+#include "./../../protocol/Executor.h"
+#include "./../core/ServerSocket.h"
+#include "./../core/ClientSocket.h"
 
 namespace Afina {
 
@@ -27,7 +41,7 @@ public:
      * socket. Once connection accepted it must be registered and being processed
      * on this thread
      */
-    void Start(int server_socket);
+    void Start(std::shared_ptr<ServerSocket> server_socket, size_t max_listeners);
 
     /**
      * Signal background thread to stop. After that signal thread must stop to
@@ -43,14 +57,39 @@ public:
      */
     void Join();
 
-protected:
+private:
+	enum class STATE {
+		STOPPED,
+		STOPPING,
+		WORKS
+	};
+
+	struct ClientAndExecutor {
+		ClientSocket client;
+		Protocol::Executor executor;
+
+		ClientAndExecutor(ClientSocket&& client_socket, std::shared_ptr<Afina::Storage> storage) : client(client_socket), executor(storage)
+		{}
+	};
+
+private:
     /**
      * Method executing by background thread
      */
-    void OnRun(void *args);
+    void _ThreadWrapper(); //For exeptions
+	void _ThreadFunction();
+
+	static void _SignalHandler(int signal);
 
 private:
-    pthread_t thread;
+	std::thread _thread;
+	std::atomic<STATE> _current_state; //independend on server state, because has Stop() function. atomic - can be changed out from _thread
+
+	std::shared_ptr<ServerSocket> _server_socket;
+	std::unordered_map<int, ClientAndExecutor> _clients;
+	size_t _max_listeners;
+
+	std::shared_ptr<Afina::Storage> _storage;
 };
 
 } // namespace NonBlocking

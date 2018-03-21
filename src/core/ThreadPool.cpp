@@ -16,7 +16,7 @@ ThreadPool::~ThreadPool() {
 }
 
 void ThreadPool::_ThreadFunction() {
-	THREADPOOL_PROCESS_DEBUG(__PRETTY_FUNCTION__);
+	THREADPOOL_CURRENT_PROCESS_DEBUG(__PRETTY_FUNCTION__);
 	try {
 		bool thread_unregistered = false;
 		while (state.load() == ThreadPool::State::kRun) {
@@ -35,9 +35,9 @@ void ThreadPool::_ThreadFunction() {
 		}
 	}
 	catch (std::exception& exc) {
-		THREADPOOL_PROCESS_DEBUG("EXCEPTION in thread (process will be stopped): " << exc.what());
+		THREADPOOL_CURRENT_PROCESS_DEBUG("EXCEPTION in thread (process will be stopped): " << exc.what());
 	}
-	THREADPOOL_PROCESS_DEBUG(__PRETTY_FUNCTION__ << " was finished");
+	THREADPOOL_CURRENT_PROCESS_DEBUG(__PRETTY_FUNCTION__ << " was finished");
 }
 
 void ThreadPool::_ExecuteTasks() {
@@ -76,7 +76,7 @@ void ThreadPool::_ExecuteTasks() {
 			task(); //Execue
 		}
 		catch (std::exception& exc) {
-			THREADPOOL_PROCESS_DEBUG("EXCEPTION during the execution of the task: " << exc.what());
+			THREADPOOL_CURRENT_PROCESS_DEBUG("EXCEPTION during the execution of the task: " << exc.what());
 		}
 	}
 }
@@ -117,8 +117,8 @@ void ThreadPool::Start(size_t low_watermark, size_t hight_watermark, size_t max_
 	_max_queue_size = max_queue_size;
 	_idle_time = idle_time;
 
-	if (hight_watermark <= low_watermark) {
-		throw std::invalid_argument("hight_watermark <= low_watermark in thread pool!");
+	if (hight_watermark < low_watermark) {
+		throw std::invalid_argument("hight_watermark < low_watermark in thread pool!");
 	}
 
 	std::unique_lock<std::mutex> __lock(threadpool_mutex);

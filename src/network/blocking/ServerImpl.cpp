@@ -182,7 +182,7 @@ void ServerImpl::RunAcceptor() {
     // connections that we'll allow to queue up. Note that listen() (!)doesn't block until
     // incoming connections arrive. It just makes the OS aware that this process is willing
     // to accept connections on this socket (which is bound to a specific IP and port)
-    if (listen(_server_socket, _max_listen) == -1) {
+    if (listen(_server_socket, max_listen) == -1) {
         close(_server_socket);
         throw std::runtime_error("Socket listen() failed");
     }
@@ -191,7 +191,7 @@ void ServerImpl::RunAcceptor() {
 	sockaddr_in client_addr = {};
 	std::memset(&client_addr, 0, sizeof(client_addr));
 	socklen_t sinSize = sizeof(sockaddr_in);
-    	while (running.load()) {
+    while (running.load()) {
         	std::cout << "network debug: waiting for connection..." << std::endl;
 
 		// When an incoming connection arrives, accept it. The call to accept() blocks until

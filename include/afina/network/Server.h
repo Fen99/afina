@@ -46,6 +46,10 @@ protected:
      * each command
      */
     std::shared_ptr<Afina::Storage> pStorage;
+
+public:
+    // Maximal count of clients to socket in listen() function
+    static const int max_listen = 5;
 };
 
 } // namespace Network

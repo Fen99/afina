@@ -13,36 +13,66 @@ namespace Network {
 namespace NonBlocking {
 
 // See Worker.h
-Worker::Worker(std::shared_ptr<Afina::Storage> ps) {
-    // TODO: implementation here
-}
+Worker::Worker(std::shared_ptr<Afina::Storage> ps) : _storage(ps), _current_state(STATE::STOPPED), _max_listeners(0)
+{}
 
 // See Worker.h
 Worker::~Worker() {
-    // TODO: implementation here
+	Join();
 }
 
 // See Worker.h
-void Worker::Start(int server_socket) {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    // TODO: implementation here
+void Worker::Start(std::shared_ptr<ServerSocket> server_socket, size_t max_listeners) {
+	NETWORK_DEBUG(__PRETTY_FUNCTION__);
+    
+	if (!server_socket->IsNonblocking()) {
+		throw std::runtime_error("Worker can accept only non-blocking server sockets!");
+	}
+
+	_max_listeners = max_listeners;
+	_server_socket = server_socket;
+	_thread = std::thread(&Worker::_ThreadWrapper, this);
+
+	//Register signal to stop epoll
+	sigaction sa = {};
+	sa.sa_handler = Worker::_SignalHandler;
+	VALIDATE_NETWORK_FUNCTION(sigaction(SIGUSR1, &sa, NULL));
+}
+
+void Worker::_SignalHandler(int) {
+	NETWORK_PROCESS_DEBUG("Signal handler was activated from Stop() function");
 }
 
 // See Worker.h
 void Worker::Stop() {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    // TODO: implementation here
+	NETWORK_DEBUG(__PRETTY_FUNCTION__);
+	if (_current_state.load() == STATE::STOPPED) { return; }
+	if (_current_state.load() == STATE::STOPPING) { Join(); }
+
+	_current_state.store(STATE::STOPPING);
+	pthread_kill(_thread.native_handle(), SIGUSR1); //Send signal to stop epoll (if it is needed)
+	Join();
+	_current_state.store(STATE::STOPPED);
 }
 
 // See Worker.h
 void Worker::Join() {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    // TODO: implementation here
+	NETWORK_DEBUG(__PRETTY_FUNCTION__);
+	_thread.join();
+}
+
+void Worker::_ThreadWrapper() {
+	try	{
+		_ThreadFunction();
+	}
+	catch (std::exception& exc) {
+		NETWORK_CURRENT_PROCESS_DEBUG("EXCEPTION in thread (process will be stopped): " << exc.what());
+	}
 }
 
 // See Worker.h
-void Worker::OnRun(void *args) {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+void Worker::_ThreadFunction() {
+	NETWORK_PROCESS_DEBUG(__PRETTY_FUNCTION__);
 
     // TODO: implementation here
     // 1. Create epoll_context here
@@ -54,6 +84,81 @@ void Worker::OnRun(void *args) {
     //
     // Do not forget to use EPOLLEXCLUSIVE flag when register socket
     // for events to avoid thundering herd type behavior.
+
+	int epoll = -1;
+	VALIDATE_NETWORK_FUNCTION(epoll = epoll_create1(0));
+
+	epoll_event socket_event = {};
+	socket_event.data.fd = _server_socket->GetSocketID();
+	socket_event.events = EPOLLIN | EPOLLEXCLUSIVE;
+	VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_ADD, _server_socket->GetSocketID(), &socket_event));
+
+	epoll_event* events = calloc(_max_listeners + 1, sizeof(epoll_event)); //+1 - for server socket
+	if (events == nullptr) {
+		throw std::runtime_error("Cannot calloc() memory for events!");
+	}
+
+	while (_current_state.load() == STATE::WORKS) {
+		int n = epoll_wait(epoll, events, _max_listeners + 1, -1);
+		if (n == -1) {
+			if (errno == EINTR && _current_state.load() != STATE::WORKS) { break; } //Worker is stopping
+			else {
+				throw NetworkException("EPoll wait failed!");
+			}
+		}
+
+		if (_current_state.load() != STATE::WORKS) { break; } //Server is stopping
+		for (int i = 0; i < n; i++) {
+			if (events[i].data.fd == _server_socket->GetSocketID()) {
+				VALIDATE_NETWORK_CONDITION(events [i].events & EPOLLIN); //Only epollin is a correct event
+				auto accept_information = _server_socket->Accept();
+				VALIDATE_NETWORK_CONDITION(accept_information.state == Socket::SOCKET_OPERATION_STATE::OK); // No async errors are allowed
+
+				accept_information.socket.MakeNonblocking();
+				socket_event.data.fd = accept_information.socket.GetSocketID();
+				socket_event.events = EPOLLIN;
+				VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_ADD, accept_information.socket.GetSocketID(), &socket_event));
+				_clients.emplace(std::make_pair(accept_information.socket.GetSocketID(), 
+												ClientAndExecutor(std::move(&accept_information.socket), _storage)));
+			}
+			else {
+				VALIDATE_NETWORK_CONDITION(events[i].events & EPOLLIN || events [i].events & EPOLLOUT || events [i].events & EPOLLHUP || 
+										   events[i].events & EPOLLERR); //Events mask
+				if (events[i].events & EPOLLHUP || events [i].events & EPOLLERR) { //Socket was closed
+					_clients.erase(events[i].data.fd); //Remove socket from listening
+					continue;
+				}
+
+				auto client = _clients.find(events[i].data.fd);
+				if (events[i].events & EPOLLIN) {
+					std::string str;
+					auto io_information = client->second.client.Receive(str);
+					VALIDATE_NETWORK_CONDITION(io_information.state == Socket::SOCKET_OPERATION_STATE::OK);
+					if (client->second.executor.AppendAndTryExecute(str)) { //Data is ready for socket
+						socket_event.data.fd = events[i].events;
+						socket_event.events = EPOLLIN | EPOLLOUT;
+						VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_MOD, events[i].events, &socket_event));
+					}
+				}
+				if (events[i].events & EPOLLOUT) {
+					if (!client->second.executor.HasOutputData()) { //All data was written
+						socket_event.data.fd = events[i].events;
+						socket_event.events = EPOLLIN;
+						VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_MOD, events[i].events, &socket_event));
+					}
+					else {
+						auto io_information = client->second.client.Send(client->second.executor.GetOutputAsIovec(),
+																		 client->second.executor.GetQueueSize());
+						VALIDATE_NETWORK_CONDITION(io_information.state == Socket::SOCKET_OPERATION_STATE::OK);
+						client->second.executor.RemoveFromOutput(io_information.result); //Remove written from output
+					}
+				}
+			}
+		}
+	}
+	
+	_clients.clear();
+	free(events);
 }
 
 } // namespace NonBlocking

@@ -7,7 +7,10 @@ set(SOURCE_FILES
 
     nonblocking/ServerImpl.cpp
     nonblocking/Worker.cpp
-    nonblocking/Utils.cpp
+    
+    core/ClientSocket.cpp
+    core/ServerSocket.cpp
+    core/Socket.cpp
 )
 
 add_library(Network ${SOURCE_FILES})

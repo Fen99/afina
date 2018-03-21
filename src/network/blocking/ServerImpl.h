@@ -103,9 +103,6 @@ private:
 	Core::ThreadPool _thread_pool;
 	// Client sockets
 	std::unordered_set<int> _client_sockets;
-
-	// Maximal count of clients to socket in listen() function
-	static const int _max_listen = 5;
 };
 
 } // namespace Blocking
