@@ -70,11 +70,12 @@ ServerSocket::AcceptInformation ServerSocket::Accept(sockaddr_in* client_addr)
 	}
 
 	socklen_t sinSize = sizeof(sockaddr_in);
-	result = accept(_socket_id, (sockaddr*) &client_addr, &sinSize);
+	int result = accept(_socket_id, (sockaddr*) &client_addr, &sinSize);
 	
 	SOCKET_OPERATION_STATE state = _InterpretateReturnValue(result);
 	if (state == SOCKET_OPERATION_STATE::OK)
 	{
+		NETWORK_DEBUG("Client socket " << result << " was created");
 		ClientSocket client(result);
 		return AcceptInformation(SOCKET_OPERATION_STATE::OK, std::move(client));
 	}

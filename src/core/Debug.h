@@ -2,6 +2,8 @@
 #define AFINA_DEBUG_H
 
 #include <iostream>
+#include <cstring>
+
 #include <pthread.h>
 
 #define NETWORK_DEBUG(X) std::cout << "network debug: " << X << std::endl

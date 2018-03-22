@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <exception>
 #include <utility>
+#include <functional>
 
 #include <signal.h>
 #include <sys/epoll.h>
@@ -57,6 +58,8 @@ public:
      */
     void Join();
 
+    int GetThreadId() { return _thread.native_handle(); }
+
 private:
 	enum class STATE {
 		STOPPED,
@@ -68,18 +71,20 @@ private:
 		ClientSocket client;
 		Protocol::Executor executor;
 
-		ClientAndExecutor(ClientSocket&& client_socket, std::shared_ptr<Afina::Storage> storage) : client(client_socket), executor(storage)
-		{}
+		ClientAndExecutor(ClientSocket&& client_socket, std::shared_ptr<Afina::Storage> storage) : client(std::move(client_socket)), executor(storage)									{}
 	};
 
 private:
-    /**
-     * Method executing by background thread
-     */
-    void _ThreadWrapper(); //For exeptions
+        /**
+        * Method executing by background thread
+	*/
+    	void _ThreadWrapper(); //For exeptions
 	void _ThreadFunction();
 
 	static void _SignalHandler(int signal);
+
+	bool _ReadFromSocket(int epoll, ClientAndExecutor& client_executor);
+	bool _WriteToSocket(int epoll, ClientAndExecutor& client_executor);
 
 private:
 	std::thread _thread;
@@ -95,4 +100,5 @@ private:
 } // namespace NonBlocking
 } // namespace Network
 } // namespace Afina
+
 #endif // AFINA_NETWORK_NONBLOCKING_WORKER_H

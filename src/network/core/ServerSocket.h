@@ -2,21 +2,22 @@
 #define AFINA_NETWORK_SERVER_SOCKET_H
 
 #include "Socket.h"
+#include "ClientSocket.h"
 
 namespace Afina {
 namespace Network {
 
-class ClientSocket;
+struct AcceptInformation; //In ClientSocket.h
 
 class ServerSocket : public Socket
 {
 	public:
 		struct AcceptInformation
 		{
-			SOCKET_OPERATION_STATE state;
+			Socket::SOCKET_OPERATION_STATE state;
 			ClientSocket socket;
 
-			AcceptInformation(SOCKET_OPERATION_STATE state, ClientSocket&& client_socket) : state(state), socket(client_socket)
+			AcceptInformation(Socket::SOCKET_OPERATION_STATE state, ClientSocket&& client_socket) : state(state), socket(std::move(client_socket))
 			{}
 		};
 

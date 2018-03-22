@@ -77,15 +77,18 @@ bool MapBasedGlobalLockImpl::Set(const std::string &key, const std::string &valu
 	auto position = _backend.find(key);
 	if (position == _backend.end()) { return false; }
 
-	int delta = (int) (new_element.GetSize() - (*(position->second)).GetSize());
-	if (delta > _max_size - _current_size) { _DeleteToSize(_max_size - delta); }
+	int size_new = new_element.GetSize();
+	int size_old = (*(position->second)).GetSize();
+	int delta = size_new - size_old;
+	
+	if (delta > (int) (_max_size - _current_size)) { _DeleteToSize(_max_size - delta); }
+	position = _backend.find(key);
+	if (position == _backend.end()) { return _Insert(key, value, false); } //If element was delited during clearing of a storage (_DeleteToSize) 
 
 	ListIterator it = _list.remove_constness(position->second);
 	(*it).value = value;
 	_current_size += delta;
-
 	_list.to_head(position->second);
-
 	return true; 
 }
 

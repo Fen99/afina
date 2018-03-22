@@ -16,9 +16,6 @@
 
 #include <afina/Storage.h>
 
-#include "Utils.h"
-#include "Worker.h"
-
 namespace Afina {
 namespace Network {
 namespace NonBlocking {
@@ -46,27 +43,30 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     }
 
     // Create server socket
-	_server_socket->Start(port, max_listen, true);
-
+    _server_socket->Start(port, max_listen, true);
+    _server_socket->MakeNonblocking();
+    
     for (int i = 0; i < n_workers; i++) {
-        _workers.emplace_back(pStorage);
-		_workers.back().Start(_server_socket, max_listen);
+	_workers.emplace_back(pStorage);
+    }
+    for (auto it = _workers.begin(); it != _workers.end(); it++) {
+    	it->Start(_server_socket, max_listen);
     }
 }
 
 // See Server.h
 void ServerImpl::Stop() {
-	NETWORK_DEBUG(__PRETTY_FUNCTION__);
-    for (auto &worker : _workers) {
-		worker.Stop();
+    NETWORK_DEBUG(__PRETTY_FUNCTION__);
+    for (auto it = _workers.begin(); it != _workers.end(); it++) {
+        it->Stop();
     }
 }
 
 // See Server.h
 void ServerImpl::Join() {
     NETWORK_DEBUG(__PRETTY_FUNCTION__);
-    for (auto &worker : _workers) {
-        worker.Join();
+     for (auto it = _workers.begin(); it != _workers.end(); it++) {
+        it->Join();
     }
 }
 

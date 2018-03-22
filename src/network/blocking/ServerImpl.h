@@ -13,7 +13,7 @@
 #include <afina/execute/Command.h>
 #include "./../../core/ThreadPool.h"
 
-#include "./../core/Debug.h"
+#include "./../../core/Debug.h"
 
 namespace Afina {
 namespace Network {

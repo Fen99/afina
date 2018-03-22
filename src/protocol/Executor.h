@@ -68,7 +68,7 @@ class Executor
 		bool AppendAndTryExecute(const std::string& str);
 		
 		std::string GetWholeOutputAsString(bool remove = false);
-		const iovec[] GetOutputAsIovec() const;
+		const iovec* GetOutputAsIovec() const;
 		size_t GetQueueSize() const { return _iovec_output.size(); }
 
 		bool HasOutputData() const { return !_output_queue.empty(); }

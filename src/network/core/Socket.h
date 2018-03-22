@@ -3,14 +3,18 @@
 
 #include <exception>
 #include <cerrno>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <sys/socket.h>
+#include <netinet/in.h>
 
-#include "./../core/Debug.h"
+#include "./../../core/Debug.h"
 
 //Macroses for check values after system callings (if errno was set)
 #define VALIDATE_NETWORK_CONDITION(X) if(!(X)) { throw Afina::NetworkException((#X)); }
-#define VALIDATE_NETWORK_FUNCTION(X) VALIDATE_NETWORK_CONDITION((X >= 0))
+#define VALIDATE_NETWORK_FUNCTION(X) VALIDATE_NETWORK_CONDITION(((X) >= 0))
 
 namespace Afina {
 namespace Network {
@@ -46,8 +50,8 @@ class Socket
 		Socket& operator=(const Socket&) = delete;
 
 		//Movable
-		Socket(Socket&&) = default;
-		Socket& operator=(Socket&&) = default;
+		Socket(Socket&& other);
+		Socket& operator=(Socket&& other);
 
 		void Shutdown(int shutdown_type = SHUT_RDWR);
 		void Close();
@@ -56,7 +60,7 @@ class Socket
 		void MakeBlocking();
 
 		bool GetSocketState() const { return _opened;         }
-		vool IsNonblocking()  const { return _is_nonblocking; }
+		bool IsNonblocking()  const { return _is_nonblocking; }
 		int  GetSocketID()    const { return _socket_id;      }
 };
 

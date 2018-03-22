@@ -9,6 +9,23 @@ Socket::Socket(int socket, bool is_opened) : _socket_id(socket), _opened(is_open
 Socket::Socket() : _socket_id(-1), _opened(false), _is_nonblocking(false)
 {}
 
+Socket::Socket(Socket&& other) : _socket_id(other._socket_id), _opened(other._opened), _is_nonblocking(other._is_nonblocking)
+{
+    other._opened = false;
+}
+
+Socket& Socket::operator=(Socket&& other) 
+{
+    Close();
+
+    _socket_id = other._socket_id;
+    _opened = other._opened;
+    _is_nonblocking = other._is_nonblocking;
+
+    other._opened = false;
+}
+
+
 Socket::~Socket() {
 	Close();
 }
@@ -41,11 +58,11 @@ void Socket::MakeNonblocking()
 {
 	if (_is_nonblocking) { return; }
 
-	int flags = fcntl(sfd, F_GETFL, 0);
-	VALIDATE_NETWORK_FUNCTION(flags = fcntl(sfd, F_GETFL, 0));
+	int flags = fcntl(_socket_id, F_GETFL, 0);
+	VALIDATE_NETWORK_FUNCTION(flags = fcntl(_socket_id, F_GETFL, 0));
 
 	flags |= O_NONBLOCK;
-	VALIDATE_NETWORK_FUNCTION(fcntl(sfd, F_SETFL, flags));
+	VALIDATE_NETWORK_FUNCTION(fcntl(_socket_id, F_SETFL, flags));
 
 	_is_nonblocking = true;
 }
@@ -54,11 +71,11 @@ void Socket::MakeBlocking()
 {
 	if (!_is_nonblocking) { return; }
 
-	int flags = fcntl(sfd, F_GETFL, 0);
-	VALIDATE_NETWORK_FUNCTION(flags = fcntl(sfd, F_GETFL, 0));
+	int flags = fcntl(_socket_id, F_GETFL, 0);
+	VALIDATE_NETWORK_FUNCTION(flags = fcntl(_socket_id, F_GETFL, 0));
 
 	flags &= ~O_NONBLOCK;
-	VALIDATE_NETWORK_FUNCTION(fcntl(sfd, F_SETFL, flags));
+	VALIDATE_NETWORK_FUNCTION(fcntl(_socket_id, F_SETFL, flags));
 }
 
 }
