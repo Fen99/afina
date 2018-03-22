@@ -77,8 +77,8 @@ bool MapBasedGlobalLockImpl::Set(const std::string &key, const std::string &valu
 	Data new_element = {key, value};
 	if (new_element.GetSize() > _max_size) { return false; }
 
-	int delta = (int) (new_element.GetSize() - (*(position->second)).GetSize());
-	if (delta > _max_size - _current_size) { _DeleteToSize(_max_size - delta); }
+	int delta = (int) ((int) new_element.GetSize() - (int) (*(position->second)).GetSize());
+	if (delta > (int) _max_size - _current_size) { _DeleteToSize(_max_size - delta); }
 
 	ListIterator it = _list.remove_constness(position->second);
 	(*it).value = value;

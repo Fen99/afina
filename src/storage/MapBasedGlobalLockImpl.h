@@ -58,7 +58,7 @@ private:
 
 public:
 	//max_size - in bytes, -1 = unlimited
-	MapBasedGlobalLockImpl(size_t max_size = std::numeric_limits<size_t>::max());
+	MapBasedGlobalLockImpl(size_t max_size = std::numeric_limits<int>::max());
 	~MapBasedGlobalLockImpl();
 
     // Implements Afina::Storage interface
