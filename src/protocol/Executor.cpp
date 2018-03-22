@@ -72,13 +72,11 @@ void Executor::_Execute()
 	_Reset(false);
 }
 
-bool Executor::AppendAndTryExecute(const std::string& str)
+bool Executor::_ReadOneCommand()
 {
-	_current_string.append(str);
-
 	bool was_command = false;
 	size_t parsed = 0;
-	try { was_command = _parser.Parse(_current_string, parsed);	}
+	try { was_command = _parser.Parse(_current_string, parsed); }
 	catch (std::exception& e)
 	{
 		//_AddLineToQueue(std::string("Parsing error: ") + e.what());
@@ -93,13 +91,19 @@ bool Executor::AppendAndTryExecute(const std::string& str)
 	uint32_t arg_size = 0;
 	auto command_object = _parser.Build(arg_size);
 	_current_command.SetNewCommand(std::move(command_object), arg_size);
-	
+
 	if (_current_command.ArgumentSize() > _current_string.size()) { return false; } //need more data
 	else
 	{
-		_Execute();
+		_Execute(); //Calls _Reset
 		return true;
 	}
+}
+
+bool Executor::AppendAndTryExecute(const std::string& str)
+{
+	_current_string.append(str);
+	while (_ReadOneCommand());
 }
 
 std::string Executor::GetWholeOutputAsString(bool remove)

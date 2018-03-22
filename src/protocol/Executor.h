@@ -58,6 +58,8 @@ class Executor
 		void _AddLineToQueue(const std::string& msg);
 		void _Reset(bool clear_data);
 		
+		bool _ReadOneCommand();
+
 		// Executes _current_command. Assumes that _current_string is enough for command argument
 		void _Execute();
 
