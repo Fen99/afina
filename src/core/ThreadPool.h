@@ -13,6 +13,8 @@
 
 #include "Debug.h"
 
+#define THREADPOOL_CURRENT_PROCESS_DEBUG(MESSAGE) CURRENT_PROCESS_DEBUG("Treadpull process: " << MESSAGE)
+
 namespace Afina {
 namespace Core {
 

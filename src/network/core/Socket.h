@@ -3,14 +3,15 @@
 
 #include <exception>
 #include <cerrno>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 
 #include <sys/socket.h>
-#include <netinet/in.h>
 
-#include "./../../core/Debug.h"
+#include "./../../core/FileDescriptor.h"
+
+#define FORMAT_NETWORK_MESSAGE(MESSAGE) "Network debug: " << MESSAGE
+#define NETWORK_DEBUG(MESSAGE) std::cout << FORMAT_NETWORK_MESSAGE(MESSAGE) << std::endl
+#define NETWORK_PROCESS_DEBUG(PID, MESSAGE) PROCESS_DEBUG(PID, FORMAT_NETWORK_MESSAGE(MESSAGE))
+#define NETWORK_CURRENT_PROCESS_DEBUG(MESSAGE) CURRENT_PROCESS_DEBUG(FORMAT_NETWORK_MESSAGE(MESSAGE))
 
 //Macroses for check values after system callings (if errno was set)
 #define VALIDATE_NETWORK_CONDITION(X) if(!(X)) { throw Afina::NetworkException((#X)); }
@@ -19,49 +20,15 @@
 namespace Afina {
 namespace Network {
 
-class Socket 
+class Socket : public Core::FileDescriptor
 {
-	protected:
-		int _socket_id;
-		bool _opened;
-		bool _is_nonblocking;
-
 	protected:
 		// Becomes an owner of the socket
 		Socket(int socket_id, bool is_opened);
 		Socket();
 
 	public:
-		enum class SOCKET_OPERATION_STATE
-		{
-			OK,
-			NO_DATA_ASYNC,
-			ERROR
-		};
-
-	protected:
-		SOCKET_OPERATION_STATE _InterpretateReturnValue(int value);
-
-	public:
-		~Socket();
-
-		//No-copiable
-		Socket(const Socket&) = delete;
-		Socket& operator=(const Socket&) = delete;
-
-		//Movable
-		Socket(Socket&& other);
-		Socket& operator=(Socket&& other);
-
 		void Shutdown(int shutdown_type = SHUT_RDWR);
-		void Close();
-
-		void MakeNonblocking();
-		void MakeBlocking();
-
-		bool GetSocketState() const { return _opened;         }
-		bool IsNonblocking()  const { return _is_nonblocking; }
-		int  GetSocketID()    const { return _socket_id;      }
 };
 
 } //namespace Network

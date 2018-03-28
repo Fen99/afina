@@ -17,7 +17,7 @@ class ClientSocket : public Socket
 	public:
 		struct IOInformation
 		{
-			SOCKET_OPERATION_STATE state;
+			IO_OPERATION_STATE state;
 			int result;
 		};
 
