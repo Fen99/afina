@@ -24,6 +24,8 @@ class FIFOServer
 
 		FIFO _reading_fifo;
 		FIFO _writing_fifo;
+		bool _has_out;
+
 		std::thread _reading_thread;
 		Protocol::Executor _executor;
 

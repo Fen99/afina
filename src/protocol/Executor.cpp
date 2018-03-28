@@ -158,5 +158,11 @@ void Executor::RemoveFromOutput(unsigned int bytes)
 	}
 }
 
+void Executor::ClearOutput()
+{
+	_output_queue.clear();
+	_iovec_output.clear();
+}
+
 } // namespace Protocol
 } // namespace Afina

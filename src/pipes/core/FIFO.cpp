@@ -8,11 +8,18 @@ FIFO::FIFO() : FileDescriptor()
 
 void FIFO::Create(const std::string& name, bool is_blocking)
 {
+	remove(name.c_str());
 	VALIDATE_SYSTEM_FUNCTION(mkfifo(name.c_str(), S_IWUSR | S_IRUSR));
 	VALIDATE_SYSTEM_FUNCTION(_fd_id = open(name.c_str(), O_RDWR));
 	_opened = true;
 
+	CURRENT_PROCESS_DEBUG("FIFO " << name << "; id = " << _fd_id << " was opened");
+
 	if (is_blocking) { MakeBlocking(); }
+
+	struct sigaction usr_signal;
+	usr_signal.sa_handler = [](int){};
+	VALIDATE_SYSTEM_FUNCTION(sigaction(SIGUSR1, &usr_signal, NULL));
 }
 
 FIFO::FIFO_READING_STATE FIFO::_Read(std::string& out, int count)
@@ -51,13 +58,14 @@ FIFO::FIFO_READING_STATE FIFO::Read(std::string& out, int count, int timeout)
 
 	pollfd descriptor;
 	descriptor.fd = _fd_id;
-	descriptor.events = POLLIN | POLLRDHUP | POLLERR;
+	descriptor.events = POLLIN | POLLRDHUP;
 
 	int result = poll(&descriptor, 1, timeout);
 	if (result == -1) { return FIFO_READING_STATE::ERROR; }
 	if (result == 0)  { return FIFO_READING_STATE::TIMEOUT; }
 
-	return _Read(out, count);
+	if (descriptor.revents & POLLIN) { return _Read(out, count); }
+	else { return FIFO_READING_STATE::ERROR; } //any error occured
 }
 
 FIFO::FIFOWrittenInformation FIFO::Write(const iovec iov[], int count)

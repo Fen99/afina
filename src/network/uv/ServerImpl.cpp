@@ -15,7 +15,12 @@ namespace UV {
 ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) : Server(ps) {}
 
 // See Server.h
-ServerImpl::~ServerImpl() { assert(workers.size() == 0); }
+ServerImpl::~ServerImpl() 
+{
+	Stop();
+	Join();
+	assert(workers.size() == 0); 
+}
 
 // See Server.h
 void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
@@ -35,8 +40,10 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
 
 // See Server.h
 void ServerImpl::Stop() {
-    for (auto worker : workers) {
-        worker->Stop();
+    while (!workers.empty()) {
+        auto worker = workers.back();
+	worker->Stop();
+	workers.pop_back();
     }
 }
 

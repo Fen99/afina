@@ -10,6 +10,7 @@
 #include <sys/uio.h>
 #include <limits.h>
 #include <poll.h>
+#include <signal.h>
 
 #include "./../../core/FileDescriptor.h"
 #include "./../../core/Debug.h"
@@ -53,6 +54,7 @@ class FIFO : public Core::FileDescriptor
 		//-- || --          written --> to prevent ENXIO error on opening
 		void Create(const std::string& name, bool is_blocking);
 
+		//Can be stopped with SIGUSR1 signal
 		FIFO_READING_STATE Read(std::string& out, int timeout = -1, int count = PIPE_BUF);
 		FIFOWrittenInformation Write(const iovec iov[], int count);
 };

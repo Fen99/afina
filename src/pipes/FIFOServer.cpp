@@ -3,7 +3,7 @@
 namespace Afina {
 namespace FIFONamespace {
 
-FIFOServer::FIFOServer(std::shared_ptr<Afina::Storage> storage) : _storage(storage), _reading_fifo(), _is_running(false),																  _is_stopping(false), _executor(storage)
+FIFOServer::FIFOServer(std::shared_ptr<Afina::Storage> storage) : _storage(storage), _reading_fifo(), _is_running(false),																  _is_stopping(false), _executor(storage), _has_out(false)
 {}
 
 FIFOServer::~FIFOServer()
@@ -15,7 +15,10 @@ void FIFOServer::Start(const std::string& reading_name, const std::string& writi
 {
 	if (_is_running || _is_stopping) { return; }
 	_reading_fifo.Create(reading_name, true);
-	_writing_fifo.Create(writing_name, false);
+	if (writing_name != "") {
+		_writing_fifo.Create(writing_name, false);
+		_has_out = true;
+	}
 
 	_is_running.store(true);
 	_reading_thread = std::thread(&FIFOServer::_ThreadWrapper, this);
@@ -26,7 +29,7 @@ void FIFOServer::Stop()
 	if (!_is_running.load() || _is_stopping.load()) { return; }
 
 	_is_stopping.store(true);
-	_reading_fifo.Close();
+	pthread_kill(_reading_thread.native_handle(), SIGUSR1);
 	Join();
 
 	_is_running.store(false);
@@ -53,9 +56,9 @@ void FIFOServer::_ThreadWrapper()
 
 void FIFOServer::_ThreadFunction()
 {
-	std::string new_data;
 	while (_is_running.load())
 	{
+		std::string new_data;
 		auto result = _reading_fifo.Read(new_data, _reading_timeout);
 		if (result == FIFO::FIFO_READING_STATE::ERROR)
 		{
@@ -64,8 +67,8 @@ void FIFOServer::_ThreadFunction()
 		}
 
 		if (result != FIFO::FIFO_READING_STATE::TIMEOUT) { _executor.AppendAndTryExecute(new_data); }
-		new_data = "";
 
+		if (!_has_out) { _executor.ClearOutput(); }
 		if (_executor.HasOutputData())
 		{
 			auto result = _writing_fifo.Write(_executor.GetOutputAsIovec(), _executor.GetQueueSize());
