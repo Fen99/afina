@@ -12,6 +12,7 @@
 #include "./../../protocol/Parser.h"
 #include <afina/execute/Command.h>
 #include "./../../core/ThreadPool.h"
+#include "./../core/Socket.h"
 
 #include "./../../core/Debug.h"
 

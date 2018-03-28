@@ -103,12 +103,20 @@ bool Executor::_ReadOneCommand()
 bool Executor::AppendAndTryExecute(const std::string& str)
 {
 	_current_string.append(str);
+<<<<<<< HEAD
 	bool command_result = false;
 	while (_ReadOneCommand())
 	{
 	    command_result = true;
 	}
 	return command_result;
+=======
+	bool was_output = false;
+	while (_ReadOneCommand()) {
+	    was_output = true;
+	}
+	return was_output;
+>>>>>>> HW05
 }
 
 std::string Executor::GetWholeOutputAsString(bool remove)
@@ -157,6 +165,12 @@ void Executor::RemoveFromOutput(unsigned int bytes)
 		_iovec_output[0].iov_base = (void*) _output_queue[0].c_str();
 		_iovec_output[0].iov_len  =  _output_queue[0].size();
 	}
+}
+
+void Executor::ClearOutput()
+{
+	_output_queue.clear();
+	_iovec_output.clear();
 }
 
 } // namespace Protocol

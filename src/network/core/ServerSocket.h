@@ -14,10 +14,10 @@ class ServerSocket : public Socket
 	public:
 		struct AcceptInformation
 		{
-			Socket::SOCKET_OPERATION_STATE state;
+			IO_OPERATION_STATE state;
 			ClientSocket socket;
 
-			AcceptInformation(Socket::SOCKET_OPERATION_STATE state, ClientSocket&& client_socket) : state(state), socket(std::move(client_socket))
+			AcceptInformation(IO_OPERATION_STATE state, ClientSocket&& client_socket) : state(state), socket(std::move(client_socket))
 			{}
 		};
 

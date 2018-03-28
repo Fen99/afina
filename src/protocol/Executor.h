@@ -75,6 +75,7 @@ class Executor
 
 		bool HasOutputData() const { return !_output_queue.empty(); }
 		void RemoveFromOutput(unsigned int bytes);
+		void ClearOutput();
 };
 
 } // namespace Protocol

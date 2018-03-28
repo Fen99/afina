@@ -191,7 +191,7 @@ void ServerImpl::RunAcceptor() {
 	sockaddr_in client_addr = {};
 	std::memset(&client_addr, 0, sizeof(client_addr));
 	socklen_t sinSize = sizeof(sockaddr_in);
-    while (running.load()) {
+    while (running.load() && !_is_finishing.load()) {
         	std::cout << "network debug: waiting for connection..." << std::endl;
 
 		// When an incoming connection arrives, accept it. The call to accept() blocks until
@@ -262,7 +262,7 @@ void ServerImpl::RunConnection(int client_socket) {
 		if (read_for_arg != 0) { read_for_arg += 2; } //\r\n
 		if (read_for_arg > current_data.size()) { //we need to read some more for argument. Not need if no argument is needed
 			if (recv(client_socket, new_data, (read_for_arg) * sizeof(char), MSG_WAITALL) <= 0) {
-				NETWORK_PROCESS_MESSAGE("Server hasn't received argument from client before the socket was closed");
+				NETWORK_CURRENT_PROCESS_DEBUG("Server hasn't received argument from client before the socket was closed");
 				break;
 			}
 			current_data.append(new_data);
@@ -284,7 +284,7 @@ void ServerImpl::RunConnection(int client_socket) {
 		out += "\r\n";
 		size_t len_sended = send(client_socket, out.c_str(), out.size(), 0);
 		if (len_sended < out.size()) {
-			NETWORK_PROCESS_MESSAGE("Server cannot send all data to client");
+			NETWORK_CURRENT_PROCESS_DEBUG("Server cannot send all data to client");
 			break;
 		}
 

@@ -6,20 +6,25 @@
 
 #include <pthread.h>
 
-#define NETWORK_DEBUG(X) std::cout << "network debug: " << X << std::endl
-#define NETWORK_PROCESS_MESSAGE(MESSAGE) std::cout << "Process PID = " << pthread_self() << ": " << MESSAGE
-#define NETWORK_PROCESS_DEBUG(PID, MESSAGE) NETWORK_DEBUG("Process PID = " << PID << ": " << MESSAGE)
-#define NETWORK_CURRENT_PROCESS_DEBUG(MESSAGE) NETWORK_PROCESS_DEBUG(std::this_thread::get_id(), MESSAGE)
+#define PROCESS_DEBUG(PID, MESSAGE) std::cout << "Process PID = " << PID << ": " << MESSAGE << std::endl
+#define CURRENT_PROCESS_DEBUG(MESSAGE) PROCESS_DEBUG(pthread_self(), MESSAGE)
 
-#define THREADPOOL_DEBUG(X) std::cout << "ThreadPool debug: " << X << std::endl
-#define THREADPOOL_CURRENT_PROCESS_DEBUG(MESSAGE) THREADPOOL_DEBUG("Threadpool process PID = " << std::this_thread::get_id() << ": " << MESSAGE)
+//Macroses for check values after system callings (if errno was set)
+#define VALIDATE_CONDITION(X) if(!(X)) { throw Afina::POSIXException((#X)); }
+#define VALIDATE_SYSTEM_FUNCTION(X) VALIDATE_CONDITION(((X) >= 0))
 
 namespace Afina
 {
 
-struct NetworkException : public std::runtime_error
+struct POSIXException : public std::runtime_error
 {
-	NetworkException(const std::string& msg) : std::runtime_error(std::string("Network error: ") + msg + ". Error description:" + std::strerror(errno))
+	POSIXException(const std::string& msg) : std::runtime_error(msg + ". Error description:" + std::strerror(errno))
+	{}
+};
+
+struct NetworkException : public POSIXException
+{
+	NetworkException(const std::string& msg) : POSIXException("Network error: ")
 	{}
 };
 

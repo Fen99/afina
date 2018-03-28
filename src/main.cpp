@@ -9,6 +9,8 @@
 #include <afina/Version.h>
 #include <afina/network/Server.h>
 
+#include "pipes/FIFOServer.h"
+
 #include "network/blocking/ServerImpl.h"
 #include "network/nonblocking/ServerImpl.h"
 #include "network/uv/ServerImpl.h"
@@ -17,6 +19,7 @@
 typedef struct {
     std::shared_ptr<Afina::Storage> storage;
     std::shared_ptr<Afina::Network::Server> server;
+	std::shared_ptr<Afina::FIFONamespace::FIFOServer> fifo;
 } Application;
 
 // Handle all signals catched
@@ -49,6 +52,8 @@ int main(int argc, char **argv) {
         // and simplify validation below
         options.add_options()("s,storage", "Type of storage service to use", cxxopts::value<std::string>());
         options.add_options()("n,network", "Type of network service to use", cxxopts::value<std::string>());
+		options.add_options()("r,read", "Reading FIFO name", cxxopts::value<std::string>());
+		options.add_options()("w,write", "Writing FIFO name", cxxopts::value<std::string>());
         options.add_options()("h,help", "Print usage info");
         options.parse(argc, argv);
 
@@ -93,6 +98,17 @@ int main(int argc, char **argv) {
         throw std::runtime_error("Unknown network type");
     }
 
+	// Init FIFO
+	std::string reading_fifo_name;
+	std::string writing_fifo_name;
+	if (options.count("read") > 0) {
+		app.fifo = std::make_shared<Afina::FIFONamespace::FIFOServer>(app.storage);
+		reading_fifo_name = options["read"].as<std::string>();
+		if (options.count("write") > 0) {
+			writing_fifo_name = options["write"].as<std::string>();
+		}
+	}
+
     // Init local loop. It will react to signals and performs some metrics collections. Each
     // subsystem is able to push metrics actively, but some metrics could be collected only
     // by polling, so loop here will does that work
@@ -116,6 +132,7 @@ int main(int argc, char **argv) {
     try {
         app.storage->Start();
         app.server->Start(8080);
+	if (app.fifo != nullptr) { app.fifo->Start(reading_fifo_name, writing_fifo_name); }
 
         // Freeze current thread and process events
         std::cout << "Application started" << std::endl;
@@ -124,6 +141,10 @@ int main(int argc, char **argv) {
         // Stop services
         app.server->Stop();
         app.server->Join();
+	if (app.fifo != nullptr) {
+		app.fifo->Stop();
+		app.fifo->Join();
+	}
         app.storage->Stop();
 
         std::cout << "Application stopped" << std::endl;

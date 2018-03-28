@@ -75,34 +75,34 @@ void Worker::_ThreadWrapper() {
 bool Worker::_ReadFromSocket(int epoll, ClientAndExecutor& client_executor) {
 	std::string str;
 	auto io_information = client_executor.client.Receive(str);
-	while (io_information.state == Socket::SOCKET_OPERATION_STATE::OK) {
+	while (io_information.state == Core::FileDescriptor::IO_OPERATION_STATE::OK) {
 		if (io_information.result == 0) { return false; } //Socket was closed
 
 		if (client_executor.executor.AppendAndTryExecute(str)) {
 			epoll_event socket_event = {};
-			socket_event.data.fd = client_executor.client.GetSocketID();
+			socket_event.data.fd = client_executor.client.GetID();
 			socket_event.events = EPOLLIN | EPOLLOUT;
-			VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_MOD, client_executor.client.GetSocketID(), &socket_event));
+			VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_MOD, client_executor.client.GetID(), &socket_event));
 		}
 		io_information = client_executor.client.Receive(str);
 	}
-	if (io_information.state == Socket::SOCKET_OPERATION_STATE::NO_DATA_ASYNC) { return true; }
+	if (io_information.state == Core::FileDescriptor::IO_OPERATION_STATE::ASYNC_ERROR) { return true; }
 	else { return false; }
 }
 
 bool Worker::_WriteToSocket(int epoll, ClientAndExecutor& client_executor) {
 	while (client_executor.executor.HasOutputData()) {
 		auto io_information = client_executor.client.Send(client_executor.executor.GetOutputAsIovec(), client_executor.executor.GetQueueSize());
-		if (io_information.state == Socket::SOCKET_OPERATION_STATE::NO_DATA_ASYNC) { return true; }
-		if (io_information.state == Socket::SOCKET_OPERATION_STATE::ERROR) { return false; }
+		if (io_information.state == Core::FileDescriptor::IO_OPERATION_STATE::ASYNC_ERROR) { return true; }
+		if (io_information.state == Core::FileDescriptor::IO_OPERATION_STATE::ERROR) { return false; }
 
 		client_executor.executor.RemoveFromOutput(io_information.result);
 	}
 	
 	epoll_event socket_event = {};
-	socket_event.data.fd = client_executor.client.GetSocketID();
+	socket_event.data.fd = client_executor.client.GetID();
 	socket_event.events = EPOLLIN;
-	VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_MOD, client_executor.client.GetSocketID(), &socket_event));
+	VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_MOD, client_executor.client.GetID(), &socket_event));
 	return true;
 }
 
@@ -125,9 +125,9 @@ void Worker::_ThreadFunction() {
 	VALIDATE_NETWORK_FUNCTION(epoll = epoll_create1(0));
 
 	epoll_event socket_event = {};
-	socket_event.data.fd = _server_socket->GetSocketID();
+	socket_event.data.fd = _server_socket->GetID();
 	socket_event.events = EPOLLIN | EPOLLEXCLUSIVE;
-	VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_ADD, _server_socket->GetSocketID(), &socket_event));
+	VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_ADD, _server_socket->GetID(), &socket_event));
 
 	epoll_event* events = (epoll_event*) calloc(_max_listeners + 1, sizeof(epoll_event)); //+1 - for server socket
 	if (events == nullptr) {
@@ -145,16 +145,16 @@ void Worker::_ThreadFunction() {
 
 		if (_current_state.load() != STATE::WORKS) { break; } //Server is stopping
 		for (int i = 0; i < n; i++) {
-			if (events[i].data.fd == _server_socket->GetSocketID()) {
+			if (events[i].data.fd == _server_socket->GetID()) {
 				VALIDATE_NETWORK_CONDITION(events[i].events & EPOLLIN); //Only epollin is a correct event
 				auto accept_information = _server_socket->Accept();
-				VALIDATE_NETWORK_CONDITION(accept_information.state == Socket::SOCKET_OPERATION_STATE::OK); // No async errors are allowed
+				VALIDATE_NETWORK_CONDITION(accept_information.state == Core::FileDescriptor::IO_OPERATION_STATE::OK); // No async errors are allowed
 
 				accept_information.socket.MakeNonblocking();
-				socket_event.data.fd = accept_information.socket.GetSocketID();
+				socket_event.data.fd = accept_information.socket.GetID();
 				socket_event.events = EPOLLIN;
-				VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_ADD, accept_information.socket.GetSocketID(), &socket_event));
-				_clients.emplace(std::make_pair(accept_information.socket.GetSocketID(), ClientAndExecutor(std::move(accept_information.socket), _storage)));
+				VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_ADD, accept_information.socket.GetID(), &socket_event));
+				_clients.emplace(std::make_pair(accept_information.socket.GetID(), ClientAndExecutor(std::move(accept_information.socket), _storage)));
 			}
 			else {
 				VALIDATE_NETWORK_CONDITION(events[i].events & EPOLLIN || events [i].events & EPOLLOUT || events [i].events & EPOLLHUP || 
