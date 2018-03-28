@@ -24,7 +24,7 @@ struct POSIXException : public std::runtime_error
 
 struct NetworkException : public POSIXException
 {
-	NetworkException(const std::string& msg) : POSIXError("Network error: ")
+	NetworkException(const std::string& msg) : POSIXException("Network error: ")
 	{}
 };
 

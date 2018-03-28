@@ -15,7 +15,7 @@ FileDescriptor::FileDescriptor(FileDescriptor&& other) : _fd_id(other._fd_id), _
     other._opened = false;
 }
 
-FileDescriptor& FileDescriptor::operator=(Socket&& other)
+FileDescriptor& FileDescriptor::operator=(FileDescriptor&& other)
 {
     Close();
 
@@ -46,7 +46,7 @@ void FileDescriptor::Close() {
 	if (_opened)
 	{ 
 		VALIDATE_SYSTEM_FUNCTION(close(_fd_id));
-		CURRENT_PROCESS_DEBUG("Socket " << _fd_id << " was closed");
+		CURRENT_PROCESS_DEBUG("File descriptor " << _fd_id << " was closed");
 	}
 	_opened = false;
 }

@@ -8,7 +8,8 @@ FIFO::FIFO() : FileDescriptor()
 
 void FIFO::Create(const std::string& name, bool is_blocking)
 {
-	VALIDATE_SYSTEM_FUNCTION(_fd_id = mkfifo(name.c_str(), O_RDWR | S_IWUSR | S_IRUSR));
+	VALIDATE_SYSTEM_FUNCTION(mkfifo(name.c_str(), S_IWUSR | S_IRUSR));
+	VALIDATE_SYSTEM_FUNCTION(_fd_id = open(name.c_str(), O_RDWR));
 	_opened = true;
 
 	if (is_blocking) { MakeBlocking(); }
@@ -48,15 +49,11 @@ FIFO::FIFO_READING_STATE FIFO::Read(std::string& out, int count, int timeout)
 
 	if (_is_nonblocking || timeout == -1) { return _Read(out, count); }
 
-	fd_set descriptors;
-	FD_ZERO(&descriptors);
-	FD_SET(_reading_fifo.GetID(), &descriptors);
+	pollfd descriptor;
+	descriptor.fd = _fd_id;
+	descriptor.events = POLLIN | POLLRDHUP | POLLERR;
 
-	timeval timeout = {};
-	timeout.tv_sec = timeout; //Every one second interrupt reading
-	timeout.tv_usec = 0;
-	
-	int result = select(2, &descriptors, NULL, NULL, &timeout);
+	int result = poll(&descriptor, 1, timeout);
 	if (result == -1) { return FIFO_READING_STATE::ERROR; }
 	if (result == 0)  { return FIFO_READING_STATE::TIMEOUT; }
 
@@ -74,7 +71,6 @@ FIFO::FIFOWrittenInformation FIFO::Write(const iovec iov[], int count)
 		switch (errno)
 		{
 			case EAGAIN:
-			case EWOULDBLOCK:
 				info.state = FIFO_WRITING_STATE::FIFO_FULL;
 				break;
 			case EPIPE:

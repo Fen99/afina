@@ -31,7 +31,7 @@ void ServerSocket::Start(unsigned int port, unsigned int max_listeners, bool mul
     // - Protocol: TCP
 	VALIDATE_NETWORK_FUNCTION(_fd_id = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP));
 	_opened = true;
-	NETWORK_DEBUG("Server socket " << _socket_id << " was created");
+	NETWORK_DEBUG("Server socket " << _fd_id << " was created");
 
 	// when the server closes the socket,the connection must stay in the TIME_WAIT state to
 	// make sure the client received the acknowledgement that the connection has been terminated.
@@ -57,7 +57,7 @@ void ServerSocket::Start(unsigned int port, unsigned int max_listeners, bool mul
 	// connections that we'll allow to queue up. Note that listen() (!)doesn't block until
 	// incoming connections arrive. It just makes the OS aware that this process is willing
 	// to accept connections on this socket (which is bound to a specific IP and port)
-	VALIDATE_NETWORK_FUNCTION(listen(_socket_id, max_listeners));
+	VALIDATE_NETWORK_FUNCTION(listen(_fd_id, max_listeners));
 }
 
 ServerSocket::AcceptInformation ServerSocket::Accept(sockaddr_in* client_addr)

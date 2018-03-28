@@ -3,8 +3,7 @@
 namespace Afina {
 namespace FIFONamespace {
 
-FIFOServer::FIFOServer(std::shared_ptr<Afina::Storage> storage) : _storage(storage), _reading_fifo(), _is_running(false),
-																  _is_stopping(false), _multiple(false)
+FIFOServer::FIFOServer(std::shared_ptr<Afina::Storage> storage) : _storage(storage), _reading_fifo(), _is_running(false),																  _is_stopping(false), _executor(storage)
 {}
 
 FIFOServer::~FIFOServer()
@@ -15,7 +14,6 @@ FIFOServer::~FIFOServer()
 void FIFOServer::Start(const std::string& reading_name, const std::string& writing_name)
 {
 	if (_is_running || _is_stopping) { return; }
-
 	_reading_fifo.Create(reading_name, true);
 	_writing_fifo.Create(writing_name, false);
 

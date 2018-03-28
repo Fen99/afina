@@ -110,7 +110,7 @@ void ThreadPool::_StartThread(bool need_lock) {
 }
 
 void ThreadPool::Start(size_t low_watermark, size_t hight_watermark, size_t max_queue_size, unsigned int idle_time) {
-	THREADPOOL_DEBUG(__PRETTY_FUNCTION__);
+	THREADPOOL_CURRENT_PROCESS_DEBUG(__PRETTY_FUNCTION__);
 
 	_low_watermark = low_watermark;
 	_hight_watermark = hight_watermark;
@@ -130,7 +130,7 @@ void ThreadPool::Start(size_t low_watermark, size_t hight_watermark, size_t max_
 }
 
 void ThreadPool::Stop(bool await) {
-	THREADPOOL_DEBUG(__PRETTY_FUNCTION__);
+	THREADPOOL_CURRENT_PROCESS_DEBUG(__PRETTY_FUNCTION__);
 	if (state.load() != ThreadPool::State::kRun) { return; }
 	state.store(ThreadPool::State::kStopping);
 
@@ -156,7 +156,7 @@ void ThreadPool::Stop(bool await) {
 		state.store(ThreadPool::State::kStopped); //Only if we are waiting we can guarantee stop state
 	}
 
-        THREADPOOL_DEBUG(__PRETTY_FUNCTION__ << " finished");	
+        THREADPOOL_CURRENT_PROCESS_DEBUG(__PRETTY_FUNCTION__ << " finished");	
 }
 
 } // namespace Afina

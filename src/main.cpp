@@ -102,11 +102,11 @@ int main(int argc, char **argv) {
 	std::string reading_fifo_name;
 	std::string writing_fifo_name;
 	if (options.count("read") > 0) {
-		app.fifo = std::make_shared<Afina::FIFONamespace::FIFOServer>();
+		app.fifo = std::make_shared<Afina::FIFONamespace::FIFOServer>(app.storage);
 		reading_fifo_name = options["read"].as<std::string>();
 		writing_fifo_name = "/dev/null";
 		if (options.count("write") > 0) {
-			writing_name = options["write"].as<std::string>();
+			writing_fifo_name = options["write"].as<std::string>();
 		}
 	}
 
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
     try {
         app.storage->Start();
         app.server->Start(8080);
-		if (app.fifo != nullptr) { app.fifo->Start(reading_fifo_name, writing_fifo_name); }
+	if (app.fifo != nullptr) { app.fifo->Start(reading_fifo_name, writing_fifo_name); }
 
         // Freeze current thread and process events
         std::cout << "Application started" << std::endl;
@@ -142,8 +142,10 @@ int main(int argc, char **argv) {
         // Stop services
         app.server->Stop();
         app.server->Join();
+	if (app.fifo != nullptr) {
 		app.fifo->Stop();
 		app.fifo->Join();
+	}
         app.storage->Stop();
 
         std::cout << "Application stopped" << std::endl;

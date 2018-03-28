@@ -8,6 +8,7 @@ add_subdirectory(execute)
 add_subdirectory(protocol)
 add_subdirectory(network)
 add_subdirectory(storage)
+add_subdirectory(pipes)
 add_subdirectory(core)
 
 # Generate version file

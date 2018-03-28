@@ -103,7 +103,11 @@ bool Executor::_ReadOneCommand()
 bool Executor::AppendAndTryExecute(const std::string& str)
 {
 	_current_string.append(str);
-	while (_ReadOneCommand());
+	bool was_output = false;
+	while (_ReadOneCommand()) {
+	    was_output = true;
+	}
+	return was_output;
 }
 
 std::string Executor::GetWholeOutputAsString(bool remove)

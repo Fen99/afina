@@ -10,7 +10,7 @@ Socket::Socket() : Core::FileDescriptor()
 {}
 
 void Socket::Shutdown(int shutdown_type) {
-	VALIDATE_NETWORK_FUNCTION(shutdown(_socket_id, shutdown_type));
+	VALIDATE_NETWORK_FUNCTION(shutdown(_fd_id, shutdown_type));
 }
 
 }

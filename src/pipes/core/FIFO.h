@@ -8,6 +8,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <limits.h>
+#include <poll.h>
 
 #include "./../../core/FileDescriptor.h"
 #include "./../../core/Debug.h"
