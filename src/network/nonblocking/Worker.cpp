@@ -35,6 +35,7 @@ void Worker::Start(std::shared_ptr<ServerSocket> server_socket, size_t max_liste
 	struct sigaction sa = {};
 	sa.sa_handler = Worker::_SignalHandler;
 	VALIDATE_NETWORK_FUNCTION(sigaction(SIGUSR1, &sa, NULL));
+	CURRENT_PROCESS_DEBUG("SIGUSR1 handler was set");
 
 	_current_state.store(STATE::WORKS);
 	_thread = std::thread(&Worker::_ThreadWrapper, this);
@@ -51,6 +52,7 @@ void Worker::Stop() {
 	if (_current_state.load() == STATE::STOPPING) { Join(); }
 
 	_current_state.store(STATE::STOPPING);
+	NETWORK_CURRENT_PROCESS_DEBUG("STOP SIGNAL to " << _thread.native_handle());
 	pthread_kill(_thread.native_handle(), SIGUSR1); //Send signal to stop epoll
 	Join();
 	_current_state.store(STATE::STOPPED);
@@ -65,6 +67,7 @@ void Worker::Join() {
 void Worker::_ThreadWrapper() {
 	try	{
 		_ThreadFunction();
+		NETWORK_CURRENT_PROCESS_DEBUG("Worker thread is going to stop");
 	}
 	catch (std::exception& exc) {
 		NETWORK_CURRENT_PROCESS_DEBUG("EXCEPTION in thread (process will be stopped): " << exc.what());

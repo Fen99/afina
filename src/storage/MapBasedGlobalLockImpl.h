@@ -42,6 +42,24 @@ namespace Backend {
 // 		bool operator== (const StringPointerWrapper& second) const { return *_str == *second._str; }
 // };
 
+using StrCRef = std::reference_wrapper<const std::string>;
+
+struct StringReferenceHash
+{
+	size_t operator()(const StrCRef& str) const
+	{
+		return std::hash<std::string>()(str);
+	}
+};
+
+struct StringReferenceEqual
+{
+	bool operator()(const StrCRef& str1, const StrCRef& str2) const
+	{
+		return str1.get() == str2.get();
+	}
+};
+	
 class MapBasedGlobalLockImpl : public Afina::Storage {
 private:
 	static size_t _GetElementSize(const std::string& key, const std::string& value) { return key.size() + value.size(); }
@@ -54,8 +72,7 @@ private:
 		Entry* next;
 		Entry* previous;
 
-		Entry(const std::string& key_p, const std::string& value_p, Entry* next_p, Entry* previous_p) : key(key_p), value(value_p), next(next_p),
-																										previous(previous_p) {}
+		Entry(const std::string& key_p, const std::string& value_p, Entry* previous_p, Entry* next_p) : key(key_p), value(value_p), next(next_p), previous(previous_p) {}
 		size_t GetSize() const { return _GetElementSize(key, value); }
 	};
 
@@ -88,7 +105,7 @@ private:
 	Entry* _first;
 	Entry* _last;
 
-	std::unordered_map<std::cref<std::string>, const Entry*> _backend;
+	std::unordered_map<StrCRef, const Entry*, StringReferenceHash, StringReferenceEqual> _backend;
 
 	std::recursive_mutex _map_mutex;
 

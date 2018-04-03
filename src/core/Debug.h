@@ -6,6 +6,8 @@
 
 #include <pthread.h>
 
+#define ASSERT(X) if(!(X)) { throw std::runtime_error(#X); }
+
 #define PROCESS_DEBUG(PID, MESSAGE) std::cout << "Process PID = " << PID << ": " << MESSAGE << std::endl
 #define CURRENT_PROCESS_DEBUG(MESSAGE) PROCESS_DEBUG(pthread_self(), MESSAGE)
 

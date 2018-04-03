@@ -20,6 +20,11 @@ void FIFOServer::Start(const std::string& reading_name, const std::string& writi
 		_has_out = true;
 	}
 
+	struct sigaction sa = {};                                                                                                                                                                       
+        sa.sa_handler = [](int){ CURRENT_PROCESS_DEBUG("SIGUSR1 - handler was activated"); };                                                                                                                                                         
+        VALIDATE_SYSTEM_FUNCTION(sigaction(SIGUSR1, &sa, NULL));              
+	CURRENT_PROCESS_DEBUG("SIGUSR1 handler was set");
+	
 	_is_running.store(true);
 	_reading_thread = std::thread(&FIFOServer::_ThreadWrapper, this);
 }
@@ -29,6 +34,7 @@ void FIFOServer::Stop()
 	if (!_is_running.load() || _is_stopping.load()) { return; }
 
 	_is_stopping.store(true);
+	CURRENT_PROCESS_DEBUG("Stop signal to " << _reading_thread.native_handle());
 	pthread_kill(_reading_thread.native_handle(), SIGUSR1);
 	Join();
 

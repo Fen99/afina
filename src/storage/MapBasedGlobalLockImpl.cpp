@@ -12,15 +12,11 @@ MapBasedGlobalLockImpl::MapBasedGlobalLockImpl(size_t max_size) :
 
 MapBasedGlobalLockImpl::~MapBasedGlobalLockImpl()
 {
-	std::lock_guard<std::recursive_mutex> __lock(_map_mutex);
-
-	while (_first != nullptr)
+	_ShrinkToSize(0);
+	if (!_backend.empty())
 	{
-		Entry* current_elemtent = _first;
-		_RemoveFromList(_first);
+		CURRENT_PROCESS_DEBUG("EXCEPTION: Storage map is not empty!");
 	}
-
-	//_backend will clear itself
 }
 
 void MapBasedGlobalLockImpl::_ShrinkToSize(size_t size)
@@ -29,8 +25,6 @@ void MapBasedGlobalLockImpl::_ShrinkToSize(size_t size)
 
 	while (_current_size > size && _last != nullptr)
 	{
-		Entry* current_element = _last;
-		_backend.erase(current_element->key);
 		_RemoveFromList(_last);
 	}
 }
@@ -44,10 +38,13 @@ bool MapBasedGlobalLockImpl::_Insert(const std::string &key, const std::string &
 	auto position = _backend.find(key);
 	if (position == _backend.end())
 	{
-		Entry* new_element = new Entry(key, value, _first, nullptr);
-		if (size_new + _current_size > _max_size)	{ _ShrinkToSize(_max_size - size_new); }
+		if (size_new + _current_size > _max_size) { _ShrinkToSize(_max_size - size_new); }
+
+		Entry* new_element = new Entry(key, value, nullptr, _first);
+		if (_first != nullptr) { _first->previous = new_element; }
 		_first = new_element;
-		_backend.emplace(new_element->key, new_element);
+		if (_last == nullptr) { _last = _first; } //for the first element
+		_backend.emplace(std::cref(new_element->key), new_element);
 
 		_current_size += size_new;
 	}
@@ -104,10 +101,7 @@ bool MapBasedGlobalLockImpl::Delete(const std::string &key)
 
 	auto position = _backend.find(key);
 	if (position == _backend.end()) { return false; }
-	Entry* current_element = const_cast<Entry*>(position->second);
-
-	_backend.erase(key);
-	_RemoveFromList(current_element);
+	_RemoveFromList(position->second);
 
 	return true; 
 }
@@ -132,38 +126,51 @@ void MapBasedGlobalLockImpl::Print()
 	Entry* element = _first;
 	while (element != nullptr)
 	{
-		std::cout << "Key: " << element->key << "; value = " << element->value <<
-					 "; previous = " << element->previous << "; next = " << element->next << std::endl;
+		std::cout << element <<":=: " << "Key: " << element->key << "; value = " << element->value <<
+			  "; previous = " << element->previous << "; next = " << element->next << std::endl;
 		element = element->next;
 	}
 
 	std::cout << "Map printing: " << std::endl;
 	for (auto it = _backend.cbegin(); it != _backend.cend(); it++)
 	{
-		std::cout << "key = " <<  it->first << " | value = const Entry*(" << it->second << ")" << std::endl;
+		std::cout << "key = " <<  it->first.get() << " | value = const Entry*(" << it->second << ")" << std::endl;
 	}
 }
 
 void MapBasedGlobalLockImpl::_MoveToHead(Entry* entry)
 {
+	if (entry == _first) { return; }
+
 	Entry* previous = entry->previous;
 	Entry* next = entry->next;
 	if (previous != nullptr) { previous->next = next; }
 	if (next != nullptr)     { next->previous = previous; }
+	if (entry == _last)      { _last = previous; }
 
-	entry->next = _first;
 	_first->previous = entry;
+	entry->next = _first;
+	_first = entry;
 }
 
 void MapBasedGlobalLockImpl::_RemoveFromList(const Entry* entry)
 {
+	_backend.erase(entry->key);
+
 	Entry* previous = entry->previous;
 	Entry* next = entry->next;
 	if (previous != nullptr) { previous->next = next; }
 	if (next != nullptr)     { next->previous = previous; }
 
+	if (entry == _first) { _first = next; }
+	if (entry == _last)  { _last = previous; }
+
+	Entry* element = const_cast<Entry*>(entry);
+	element->previous = nullptr;
+	element->next = nullptr;
+
 	_current_size -= entry->GetSize();
-	delete const_cast<Entry*>(entry);
+	delete element;
 }
 
 } // namespace Backend
