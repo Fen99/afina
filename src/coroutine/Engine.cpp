@@ -1,4 +1,5 @@
 #include <afina/coroutine/Engine.h>
+#include "../core/Debug.h"
 
 #include <setjmp.h>
 #include <stdio.h>
@@ -7,13 +8,69 @@
 namespace Afina {
 namespace Coroutine {
 
-void Engine::Store(context &ctx) {}
+Engine::~Engine()
+{
+	while (alive != nullptr)
+	{
+		if (cur_routine == alive) { cur_routine = nullptr; }
+		context* next = alive->next;
+		delete alive;
+		alive = next;
+	}
 
-void Engine::Restore(context &ctx) {}
+	if (cur_routine != nullptr) { delete cur_routine; }
+	if (idle_ctx != nullptr)	{ delete idle_ctx; }
+}
 
-void Engine::yield() {}
+void Engine::Store(context &ctx) {
+	char current_stack_position = 0;
+	ctx.Hight = &current_stack_position;
 
-void Engine::sched(void *routine_) {}
+	ASSERT(ctx.Hight > ctx.Low && ctx.Low != 0);
+
+	size_t stack_size = ctx.Hight - ctx.Low;
+	char* stack = (char*) calloc(stack_size, sizeof(char));
+	memcpy(stack, ctx.Low, stack_size);
+	
+	if (std::get<0>(pc->Stack) != nullptr) {
+		free((void*) std::get<0>(ctx.Stack));
+	}
+	std::get<0>(ctx.Stack) = stack;
+	std::get<1>(ctx.Stack) = stack_size;
+}
+
+void Engine::Restore(context &ctx) {
+	ASSERT(std::get<0>(ctx.Stack) != nullptr);
+	ASSERT(ctx.Low != 0 && std::get<1>(ctx.Stack) != 0);
+	
+	_Rewind(ctx);
+	memcpy(ctx.Low, std::get<0>(ctx.Stack), std::get<1>(ctx.Stack)); //Restore stack
+	cur_routine = &ctx;
+	longjmp(ctx.cur_routine, 1);
+}
+
+void Engine::_Rewind(context &ctx) {
+	char stack_marker = 0;
+	if (&stack_marker <= ctx.Hight) { _Rewind(ctx); }
+}
+
+void Engine::yield() {
+	if (alive == nullptr) { return; }
+	if (alive == cur_routine && alive->next != nullptr) {
+		sched(alive->next);
+	}
+	sched(alive);
+}
+
+void Engine::sched(void *routine_) {
+	context& ctx = *(static_cast<context*>(routine_));
+	if (cur_routine != idle_ctx) { //Function was called from scheduller
+		Store(*cur_routine); //Because storing of idle_ctx presented in start function
+		if (setjmp(cur_routine->Environment) > 0) { return; } //corutine continue
+	}
+
+	Restore(ctx);
+}
 
 } // namespace Coroutine
 } // namespace Afina

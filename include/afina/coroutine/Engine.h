@@ -37,6 +37,12 @@ private:
         // To include routine in the different lists, such as "alive", "blocked", e.t.c
         struct context *prev = nullptr;
         struct context *next = nullptr;
+
+		~context() {
+			if (std::get<0>(Stack) != nullptr) {
+				free((void*) std::get<0>(Stack)); //because calloc was used
+			}
+		}
     } context;
 
     /**
@@ -71,14 +77,16 @@ protected:
     void Restore(context &ctx);
 
     /**
-     * Suspend current coroutine execution and execute given context
+     * Rewinds stack upper the new corutine position
      */
-    // void Enter(context& ctx);
+	void _Rewind(context& new_ctx);
 
 public:
     Engine() : StackBottom(0), cur_routine(nullptr), alive(nullptr) {}
     Engine(Engine &&) = delete;
     Engine(const Engine &) = delete;
+
+	~Engine();
 
     /**
      * Gives up current routine execution and let engine to schedule other one. It is not defined when
@@ -111,31 +119,42 @@ public:
      */
     template <typename... Ta> void start(void (*main)(Ta...), Ta &&... args) {
         // To acquire stack begin, create variable on stack and remember its address
-        char StackStartsHere;
+        char StackStartsHere = 0;
         this->StackBottom = &StackStartsHere;
 
         // Start routine execution
         void *pc = run(main, std::forward<Ta>(args)...);
         idle_ctx = new context();
+		idle_ctx->Low = StackBottom; //args of start function have already passed to "run"
+		cur_routine = idle_ctx;
 
         if (setjmp(idle_ctx->Environment) > 0) {
             // Here: correct finish of the coroutine section
             yield();
         } else if (pc != nullptr) {
-            Store(*idle_ctx);
+            Store(*idle_ctx); //not critical: we can pass stack saving here, we need only Environment
             sched(pc);
         }
 
         // Shutdown runtime
         delete idle_ctx;
+		idle_ctx = nullptr;
         this->StackBottom = 0;
     }
 
+public:
+	//Wrapper of _run. Allows to save coroutine bottom address
+	template <typename... Ta> void *run(void(*func)(Ta...), Ta &&... args){
+		char coroutine_start = 0;
+		_run(&coroutine_start, func, std::forward<Ta>(args)...);
+	}
+
+protected:
     /**
      * Register new coroutine. It won't receive control until scheduled explicitely or implicitly. In case of some
      * errors function returns -1
      */
-    template <typename... Ta> void *run(void (*func)(Ta...), Ta &&... args) {
+    template <typename... Ta> void *_run(char* bottom, void (*func)(Ta...), Ta &&... args) {
         if (this->StackBottom == 0) {
             // Engine wasn't initialized yet
             return nullptr;
@@ -143,6 +162,7 @@ public:
 
         // New coroutine context that carries around all information enough to call function
         context *pc = new context();
+		pc->Low = bottom;
 
         // Store current state right here, i.e just before enter new coroutine, later, once it gets scheduled
         // execution starts here. Note that we have to acquire stack of the current function call to ensure
@@ -173,7 +193,6 @@ public:
             // current coroutine finished, and the pointer is not relevant now
             cur_routine = nullptr;
             pc->prev = pc->next = nullptr;
-            delete std::get<0>(pc->Stack);
             delete pc;
 
             // We cannot return here, as this function "returned" once already, so here we must select some other
