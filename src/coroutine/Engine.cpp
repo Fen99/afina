@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 namespace Afina {
 namespace Coroutine {
@@ -19,39 +20,39 @@ Engine::~Engine()
 	}
 
 	if (cur_routine != nullptr) { delete cur_routine; }
-	if (idle_ctx != nullptr)	{ delete idle_ctx; }
+	if (idle_ctx != nullptr)    { delete idle_ctx; }
 }
 
 void Engine::Store(context &ctx) {
 	char current_stack_position = 0;
 	ctx.Hight = &current_stack_position;
 
-	ASSERT(ctx.Hight > ctx.Low && ctx.Low != 0);
+	ASSERT(ctx.Hight < ctx.Low && ctx.Low != nullptr);
 
-	size_t stack_size = ctx.Hight - ctx.Low;
+	size_t stack_size = ctx.Low - ctx.Hight;
 	char* stack = (char*) calloc(stack_size, sizeof(char));
-	memcpy(stack, ctx.Low, stack_size);
+	memcpy(stack, ctx.Hight, stack_size);
 	
-	if (std::get<0>(pc->Stack) != nullptr) {
-		free((void*) std::get<0>(ctx.Stack));
-	}
+	ctx.RemoveStack();
 	std::get<0>(ctx.Stack) = stack;
 	std::get<1>(ctx.Stack) = stack_size;
 }
 
 void Engine::Restore(context &ctx) {
 	ASSERT(std::get<0>(ctx.Stack) != nullptr);
-	ASSERT(ctx.Low != 0 && std::get<1>(ctx.Stack) != 0);
-	
+	ASSERT(ctx.Hight != 0 && std::get<1>(ctx.Stack) != 0);
+
 	_Rewind(ctx);
-	memcpy(ctx.Low, std::get<0>(ctx.Stack), std::get<1>(ctx.Stack)); //Restore stack
-	cur_routine = &ctx;
-	longjmp(ctx.cur_routine, 1);
 }
 
 void Engine::_Rewind(context &ctx) {
 	char stack_marker = 0;
-	if (&stack_marker <= ctx.Hight) { _Rewind(ctx); }
+	if (&stack_marker >= ctx.Hight) { _Rewind(ctx); }
+	else {
+		memcpy(ctx.Hight, std::get<0>(ctx.Stack), std::get<1>(ctx.Stack)); //Restore stack
+		cur_routine = &ctx;
+		longjmp(ctx.Environment, 1);
+	}
 }
 
 void Engine::yield() {

@@ -37,12 +37,17 @@ private:
         // To include routine in the different lists, such as "alive", "blocked", e.t.c
         struct context *prev = nullptr;
         struct context *next = nullptr;
+	
+	void RemoveStack() {
+		if (std::get<0>(Stack) != nullptr) {
+			free((void*) std::get<0>(Stack)); //because calloc was used
+			std::get<0>(Stack) = nullptr;
+		}	
+	}
 
-		~context() {
-			if (std::get<0>(Stack) != nullptr) {
-				free((void*) std::get<0>(Stack)); //because calloc was used
-			}
-		}
+	~context() {
+		RemoveStack();
+	}
     } context;
 
     /**
@@ -130,7 +135,7 @@ public:
 
         if (setjmp(idle_ctx->Environment) > 0) {
             // Here: correct finish of the coroutine section
-            yield();
+	    yield();
         } else if (pc != nullptr) {
             Store(*idle_ctx); //not critical: we can pass stack saving here, we need only Environment
             sched(pc);
@@ -138,7 +143,9 @@ public:
 
         // Shutdown runtime
         delete idle_ctx;
-		idle_ctx = nullptr;
+	idle_ctx = nullptr;
+
+	cur_routine = nullptr;
         this->StackBottom = 0;
     }
 
