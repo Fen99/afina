@@ -2,7 +2,11 @@
 set(SOURCE_FILES
     Command.cpp
     Add.cpp
-    Append.cpp
+    AppendPrepend.cpp
+	InsertCommand.cpp
+	IncrDect.cpp
+	MultipleStringsCommand.cpp
+	Delete.cpp
     Get.cpp
     Set.cpp
     Replace.cpp

@@ -24,32 +24,13 @@ namespace Protocol {
 class Executor
 {
 	private:
-		class Command
-		{
-			public:
-				typedef std::unique_ptr<Execute::Command> command_ptr;
+		typedef std::unique_ptr<Execute::Command> command_ptr;
 
-			private:
-				command_ptr _command_object;
-				size_t _arg_size;
-
-			public:
-				Command();
-
-				void Reset();
-				void SetNewCommand(command_ptr&& command_object, size_t arg_size);
-
-				const command_ptr& CommandObject() const { return _command_object; }
-				size_t ArgumentSize() const { return _arg_size; }
-
-		};
-
-	private:
 		std::shared_ptr<Afina::Storage> _storage;
 
 		std::string _current_string;
 		Parser _parser;
-		Command _current_command;
+		command_ptr _current_command;
 
 		std::deque<std::string> _output_queue;
 		std::vector<iovec> _iovec_output;

@@ -5,31 +5,14 @@
 namespace Afina {
 namespace Protocol {
 
-Executor::Command::Command() : _command_object(), _arg_size(0) 
-{}
-
-void Executor::Command::Reset()
-{
-	_command_object.release();
-	_arg_size = 0;
-}
-
-void Executor::Command::SetNewCommand(command_ptr&& command_object, size_t arg_size)
-{
-	_command_object = std::move(command_object);
-	if (arg_size == 0) { _arg_size = 0; }
-	else { _arg_size = arg_size + 2; } //\r\n
-}
-
-//===============================================================================================
-
 Executor::Executor(std::shared_ptr<Afina::Storage> storage) : _storage(storage)
 {}
 
 void Executor::_AddLineToQueue(const std::string& msg)
 {
-	_output_queue.push_back(msg+"\r\n");
+	if (msg.empty()) { return; }
 
+	_output_queue.push_back(msg+"\r\n");
 	iovec new_iov = {(void*) _output_queue.back().c_str(), _output_queue.back().size()};
 	_iovec_output.push_back(std::move(new_iov));
 }
@@ -37,7 +20,7 @@ void Executor::_AddLineToQueue(const std::string& msg)
 void Executor::_Reset(bool clear_data)
 {
 	_parser.Reset();
-	_current_command.Reset();
+	_current_command.reset();
 
 	if (clear_data) { _current_string = ""; }
 }
@@ -46,26 +29,25 @@ void Executor::_Execute()
 {
 	std::string argument;
 	std::string out;
-	if (_current_command.ArgumentSize() != 0) //Command need argument
+	size_t data_size = ((_current_command->DataSize() == 0) ? 0 : (_current_command->DataSize() + 2)); //for \r\n
+	if (data_size != 0) //Command need argument
 	{
-		argument = _current_string.substr(0, _current_command.ArgumentSize());
-		_current_string = _current_string.substr(_current_command.ArgumentSize()); //remove argument from received data
+		argument = _current_string.substr(0, data_size);
+		_current_string = _current_string.substr(data_size); //remove argument from received data
 
 		if (argument.substr(argument.size() - 2) != "\r\n")
 		{
-			//_AddLineToQueue(std::string("Parsing error: ") + "command argument should finish by \\r\\n");
-			_AddLineToQueue("ERROR");
+			_AddLineToQueue("CLIENT_ERROR Data should ends with \\r\\n");
 			_Reset(false);
 			return;
 		}
 		argument = argument.substr(0, argument.size() - 2);  // \r\n not needed
 	}
 
-	try { _current_command.CommandObject()->Execute(*_storage, argument, out); }
+	try { _current_command->Execute(*_storage, argument, out); }
 	catch (std::exception& e) {
-		out = "ERROR";
-		//out = "SERVER ERROR ";
-		//out += e.what();
+		out = "SERVER_ERROR ";
+		out += e.what();
 	}
 
 	_AddLineToQueue(out);
@@ -77,10 +59,9 @@ bool Executor::_ReadOneCommand()
 	bool was_command = false;
 	size_t parsed = 0;
 	try { was_command = _parser.Parse(_current_string, parsed); }
-	catch (std::exception& e)
+	catch (std::exception&)
 	{
-		//_AddLineToQueue(std::string("Parsing error: ") + e.what());
-		_AddLineToQueue("ERROR");
+		_AddLineToQueue("ERROR"); //Unknown command
 		_Reset(true);
 		return true;
 	}
@@ -88,11 +69,10 @@ bool Executor::_ReadOneCommand()
 	_current_string = _current_string.substr(parsed); //remove parsed part of string (was saved in parser) <or> remove command
 	if (!was_command) { return false; } //need more data
 
-	uint32_t arg_size = 0;
-	auto command_object = _parser.Build(arg_size);
-	_current_command.SetNewCommand(std::move(command_object), arg_size);
+	_current_command = _parser.Build(arg_size);
 
-	if (_current_command.ArgumentSize() > _current_string.size()) { return false; } //need more data
+	//+2 - for \r\n
+	if (_current_command->DataSize() + 2 > _current_string.size()) { return false; } //need more data
 	else
 	{
 		_Execute(); //Calls _Reset
