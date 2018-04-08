@@ -7,25 +7,29 @@
 namespace Afina {
 namespace Protocol {
 
+Parser::_CommandTypes Parser::_command_types;
+
 Parser::_CommandTypes::_CommandTypes() {
-	types.emplace_back({"set",     []() { return std::unique_ptr<Execute::Command>(new Execute::Set);                  }});
-	types.emplace_back({"replace", []() { return std::unique_ptr<Execute::Command>(new Execute::Replace);              }});
-	types.emplace_back({"append",  []() { return std::unique_ptr<Execute::Command>(new Execute::AppendPrepend(true));  }});
-	types.emplace_back({"prepend", []() { return std::unique_ptr<Execute::Command>(new Execute::AppendPrepend(false)); }});
-	types.emplace_back({"add",     []() { return std::unique_ptr<Execute::Command>(new Execute::Add);                  }});
+	types.push_back(std::make_pair("set",     []() { return std::unique_ptr<Execute::Command>(new Execute::Set);                  }));
+	types.push_back(std::make_pair("replace", []() { return std::unique_ptr<Execute::Command>(new Execute::Replace);              }));
+	types.push_back(std::make_pair("append",  []() { return std::unique_ptr<Execute::Command>(new Execute::AppendPrepend(true));  }));
+	types.push_back(std::make_pair("prepend", []() { return std::unique_ptr<Execute::Command>(new Execute::AppendPrepend(false)); }));
+	types.push_back(std::make_pair("add",     []() { return std::unique_ptr<Execute::Command>(new Execute::Add);                  }));
 
-	types.emplace_back({"incr", []() { return std::unique_ptr<Execute::Command>(new Execute::IncrDecr(true));  }});
-	types.emplace_back({"decr", []() { return std::unique_ptr<Execute::Command>(new Execute::IncrDecr(false)); }});
+	types.push_back(std::make_pair("incr", []() { return std::unique_ptr<Execute::Command>(new Execute::IncrDecr(true));  }));
+	types.push_back(std::make_pair("decr", []() { return std::unique_ptr<Execute::Command>(new Execute::IncrDecr(false)); }));
 
-	types.emplace_back({"get",  []() { return std::unique_ptr<Execute::Command>(new Execute::Get); }});
-	types.emplace_back({"gets", []() { return std::unique_ptr<Execute::Command>(new Execute::Get); }});
+	types.push_back(std::make_pair("get",  []() { return std::unique_ptr<Execute::Command>(new Execute::Get); }));
+	types.push_back(std::make_pair("gets", []() { return std::unique_ptr<Execute::Command>(new Execute::Get); }));
 
-	types.emplace_back({"delete", []() { return std::unique_ptr<Execute::Command>(new Execute::Delete); }});
+	types.push_back(std::make_pair("delete", []() { return std::unique_ptr<Execute::Command>(new Execute::Delete); }));
+
+	types.push_back(std::make_pair("stats", []() { return std::unique_ptr<Execute::Command>(new Execute::Stats); }));
 }
 
 Parser::command_ptr Parser::_CommandFactory(const std::string& name) {
 	for (auto it : _command_types.types) {
-		if (it->first == name) { return it->second(); }
+		if (it.first == name) { return it.second(); }
 	}
 	return nullptr;
 }
@@ -67,7 +71,9 @@ bool Parser::Parse(const char *input, const size_t size, size_t &parsed) {
 	bool parse_complete = _FormatInput(input, size, parsed, count_before_space);
 	
 	if (count_before_space != size) { //a new command should be extracted
-		_builded_command = _CommandFactory(_current_str.substr(0, count_before_space));
+		_current_name = _current_str.substr(0, count_before_space);
+		_builded_command = _CommandFactory(_current_name);
+
 		if (_current_str[count_before_space] == ' ') { _current_str = _current_str.substr(count_before_space + 1); } //For space case
 		else { _current_str = _current_str.substr(count_before_space); } //\r\n after the name of command
 	}
@@ -92,6 +98,7 @@ void Parser::Reset() {
 	_parse_complete = false;
 	_current_str.clear();
 	_builded_command.reset();
+	_current_name.clear();
 }
 
 } // namespace Protocol

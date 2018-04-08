@@ -21,9 +21,10 @@ protected:
 
 protected:
     Command() : _data_size(0), _no_reply(false) {}
-    virtual ~Command() {}
 
 public:
+    virtual ~Command() {}
+
     /*
     	Extracts command arguments from input string. No garantee for its changes. Expected the string without 1)command name and space after it; 2)\r\n
         Returns true if arguments was achived successfully, false in case of parsing error

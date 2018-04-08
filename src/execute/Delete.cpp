@@ -1,6 +1,8 @@
 #include <afina/Storage.h>
 #include <afina/execute/Delete.h>
 
+#include <iostream>
+
 namespace Afina {
 namespace Execute {
 
@@ -14,9 +16,9 @@ bool Delete::ExtractArguments(std::string& args_str) {
 	else { return true; }
 }
 
-virtual void Delete::Execute(Storage &storage, const std::string& data, std::string &out) const {
+void Delete::Execute(Storage &storage, const std::string& data, std::string &out) const {
 	std::cout << "Delete(" << _key << ")" << std::endl;
-	out = (storage.Delete(_key, args) ? "DELETED" : "NOT_FOUND");
+	out = (storage.Delete(_key) ? "DELETED" : "NOT_FOUND");
 
 	if (_no_reply) { out.clear(); }
 }

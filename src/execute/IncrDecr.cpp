@@ -6,7 +6,7 @@
 namespace Afina {
 namespace Execute {
 
-void IncrDecr::Execute(Storage &storage, const std::string &args, std::string &out) {
+void IncrDecr::Execute(Storage &storage, const std::string &args, std::string &out) const {
 	if (_type == true) { std::cout << "Incr(" << _key << ")" << args << std::endl; }
 	else               { std::cout << "Decr(" << _key << ")" << args << std::endl; }
 
@@ -32,7 +32,7 @@ void IncrDecr::Execute(Storage &storage, const std::string &args, std::string &o
 	int64_t result = (_type ? (curr_val + _value) : (curr_val - _value)); //true - incr, false - decr
 	if (result < 0) { result = 0; }
 
-	if (!storage.Put(_key, std::to_string(result))) { out = "NOT_STORED"; }
+	if (storage.Put(_key, std::to_string(result))) { out = std::to_string(result); }
 	else { out = "SERVER_ERROR Cannot store new value: Put() function returned false. Probably no enough memory"; }
 
 	if (_no_reply) { out.clear(); }

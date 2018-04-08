@@ -20,7 +20,7 @@ namespace Execute {
  * - "NOT_FOUND", to indicate the item with this value was not found
  * - "<value>" where <value> is the new value of the item's data, after the increment/decrement operation was carried out.
  */
-class IncrDecr : KeyValueCommand {
+class IncrDecr : public KeyValueCommand {
 protected:
     bool _type;
 public:

@@ -8,6 +8,7 @@
 #include <utility>
 
 #include <afina/execute/Add.h>
+#include <afina/execute/Replace.h>
 #include <afina/execute/AppendPrepend.h>
 #include <afina/execute/IncrDecr.h>
 #include <afina/execute/Command.h>
@@ -73,12 +74,13 @@ public:
      */
     void Reset();
 
-    //inline const std::string &Name() const { return name; }
+    inline const std::string &Name() const { return _current_name; }
 
 private:
     std::string _current_str;
-	bool _parse_complete;
-	command_ptr _builded_command;
+    std::string _current_name;
+    bool _parse_complete;
+    command_ptr _builded_command;
 
 private:
 	//Emulates static constructor

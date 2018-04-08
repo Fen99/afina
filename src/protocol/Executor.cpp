@@ -69,10 +69,11 @@ bool Executor::_ReadOneCommand()
 	_current_string = _current_string.substr(parsed); //remove parsed part of string (was saved in parser) <or> remove command
 	if (!was_command) { return false; } //need more data
 
+	uint32_t arg_size = 0;
 	_current_command = _parser.Build(arg_size);
 
 	//+2 - for \r\n
-	if (_current_command->DataSize() + 2 > _current_string.size()) { return false; } //need more data
+	if (_current_command->DataSize() + 2 > _current_string.size() && _current_command->DataSize() != 0) { return false; } //need more data
 	else
 	{
 		_Execute(); //Calls _Reset

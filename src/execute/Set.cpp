@@ -7,7 +7,7 @@ namespace Afina {
 namespace Execute {
 
 // memcached protocol: "set" means "store this data".
-void Set::Execute(Storage &storage, const std::string &args, std::string &out) {
+void Set::Execute(Storage &storage, const std::string &args, std::string &out) const {
 	InsertCommand::Execute(storage, args, out); //checks data len
 
     std::cout << "Set(" << _key << "): " << args << std::endl;

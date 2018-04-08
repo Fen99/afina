@@ -7,7 +7,7 @@ namespace Afina {
 namespace Execute {
 
 // memcached protocol: "append" means "add this data to an existing key after existing data".
-void Append::Execute(Storage &storage, const std::string &args, std::string &out) {
+void AppendPrepend::Execute(Storage &storage, const std::string &args, std::string &out) const {
 	InsertCommand::Execute(storage, args, out); //checks data len
 
 	if (_type == true) { std::cout << "Append("  << _key << ")" << args << std::endl; }
