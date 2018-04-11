@@ -13,7 +13,6 @@
 #include <signal.h>
 
 #include "./../../core/FileDescriptor.h"
-#include "./../../core/Debug.h"
 
 namespace Afina {
 namespace FIFONamespace {

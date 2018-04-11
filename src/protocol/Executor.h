@@ -9,11 +9,11 @@
 
 #include <sys/uio.h>
 
+#include <afina/core/Debug.h>
 #include <afina/Storage.h>
 #include <afina/execute/Command.h>
 
 #include "Parser.h"
-#include "./../core/Debug.h"
 
 namespace Afina {
 class Storage;

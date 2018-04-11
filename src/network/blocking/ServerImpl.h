@@ -9,12 +9,12 @@
 #include <iostream>
 
 #include <afina/network/Server.h>
+#include <afina/core/Debug.h>
 #include "./../../protocol/Parser.h"
 #include <afina/execute/Command.h>
 #include "./../../core/ThreadPool.h"
 #include "./../core/Socket.h"
 
-#include "./../../core/Debug.h"
 
 namespace Afina {
 namespace Network {

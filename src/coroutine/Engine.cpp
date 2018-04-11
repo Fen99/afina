@@ -1,5 +1,4 @@
 #include <afina/coroutine/Engine.h>
-#include "../core/Debug.h"
 
 #include <setjmp.h>
 #include <stdio.h>
@@ -8,6 +7,8 @@
 
 namespace Afina {
 namespace Coroutine {
+
+int Engine::_stack_direction = 0;
 
 Engine::~Engine()
 {
@@ -19,37 +20,52 @@ Engine::~Engine()
 		alive = next;
 	}
 
-	if (cur_routine != nullptr) { delete cur_routine; }
-	if (idle_ctx != nullptr)    { delete idle_ctx; }
+	//delete nullptr; - no effect command
+	/*if (cur_routine != nullptr) */ delete cur_routine;
+	/*if (idle_ctx != nullptr)    */ delete idle_ctx;
 }
 
 void Engine::Store(context &ctx) {
 	char current_stack_position = 0;
-	ctx.Hight = &current_stack_position;
+	ctx.SetEndAddress(&current_stack_position);
 
-	ASSERT(ctx.Hight < ctx.Low && ctx.Low != nullptr);
+	ASSERT(ctx.Low() < ctx.Hight() && ctx.Low() != nullptr);
 
-	size_t stack_size = ctx.Low - ctx.Hight;
+	size_t stack_size = ctx.Hight() - ctx.Low();
 	char* stack = (char*) calloc(stack_size, sizeof(char));
-	memcpy(stack, ctx.Hight, stack_size);
+	memcpy(stack, ctx.Low(), stack_size);
 	
 	ctx.RemoveStack();
-	std::get<0>(ctx.Stack) = stack;
-	std::get<1>(ctx.Stack) = stack_size;
+	ctx.Stack = stack;
 }
 
 void Engine::Restore(context &ctx) {
-	ASSERT(std::get<0>(ctx.Stack) != nullptr);
-	ASSERT(ctx.Hight != 0 && std::get<1>(ctx.Stack) != 0);
+	ASSERT(ctx.Stack != nullptr);
+	ASSERT(ctx.Low() < ctx.Hight() && ctx.Low() != nullptr);
 
 	_Rewind(ctx);
 }
 
 void Engine::_Rewind(context &ctx) {
 	char stack_marker = 0;
-	if (&stack_marker >= ctx.Hight) { _Rewind(ctx); }
+
+	ASSERT(_stack_direction != 0);
+	
+	if (_stack_direction > 0) {
+		if (&stack_marker >= ctx.Low()) { 
+			_Rewind(ctx); 
+			stack_marker = 1;
+		}
+	}
 	else {
-		memcpy(ctx.Hight, std::get<0>(ctx.Stack), std::get<1>(ctx.Stack)); //Restore stack
+		if (&stack_marker <= ctx.Hight()) { 
+			_Rewind(ctx); 
+			stack_marker = 1;
+		}
+	}
+
+	if (stack_marker == 0) { //rewind was finished
+		memcpy(ctx.Low(), ctx.Stack, ctx.Hight() - ctx.Low()); //Restore stack
 		cur_routine = &ctx;
 		longjmp(ctx.Environment, 1);
 	}

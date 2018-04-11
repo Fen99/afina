@@ -14,7 +14,6 @@
 #include <sys/types.h>
 #include <errno.h>
 
-#include "./../../core/Debug.h"
 #include "./../../protocol/Executor.h"
 #include "./../core/ServerSocket.h"
 #include "./../core/ClientSocket.h"

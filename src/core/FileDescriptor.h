@@ -10,7 +10,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#include "Debug.h"
+#include <afina/core/Debug.h>
 
 namespace Afina {
 namespace Core {

@@ -11,7 +11,7 @@
 #include <atomic>
 #include <unordered_map>
 
-#include "Debug.h"
+#include <afina/core/Debug.h>
 
 #define THREADPOOL_CURRENT_PROCESS_DEBUG(MESSAGE) CURRENT_PROCESS_DEBUG("Treadpull process: " << MESSAGE)
 
