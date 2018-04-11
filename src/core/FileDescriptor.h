@@ -31,6 +31,7 @@ class FileDescriptor
 		enum class IO_OPERATION_STATE
 		{
 			OK,
+			EOF_FLAG,
 			ASYNC_ERROR,
 			ERROR
 		};

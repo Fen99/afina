@@ -30,6 +30,7 @@ ClientSocket::IOInformation ClientSocket::Receive(std::string& out, int count, b
 		}
 		else
 		{
+			if (result == 0) { info.state = IO_OPERATION_STATE::EOF_FLAG; }
 			break;
 		}
 	}

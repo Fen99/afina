@@ -78,7 +78,8 @@ void Worker::_ThreadWrapper() {
 bool Worker::_ReadFromSocket(int epoll, ClientAndExecutor& client_executor) {
 	std::string str;
 	auto io_information = client_executor.client.Receive(str);
-	while (io_information.state == Core::FileDescriptor::IO_OPERATION_STATE::OK) {
+	while (io_information.state == Core::FileDescriptor::IO_OPERATION_STATE::OK || 
+	       io_information.state == Core::FileDescriptor::IO_OPERATION_STATE::EOF_FLAG) {
 		if (io_information.result == 0) { return false; } //Socket was closed
 
 		if (client_executor.executor.AppendAndTryExecute(str)) {
@@ -163,7 +164,7 @@ void Worker::_ThreadFunction() {
 				VALIDATE_NETWORK_CONDITION(events[i].events & EPOLLIN || events [i].events & EPOLLOUT || events [i].events & EPOLLHUP || 
 							   events[i].events & EPOLLERR); //Events mask
 				auto client = _clients.find(events[i].data.fd);
-				if (client == _clients.end()) { continue; } //Unknown or unregistered client in thread pool
+				VALIDATE_NETWORK_CONDITION(client != _clients.end());
 
 				if (events[i].events & EPOLLHUP || events [i].events & EPOLLERR) { //Socket was closed
 					_clients.erase(client); //Remove socket from listening
