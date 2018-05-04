@@ -7,6 +7,7 @@
 #include <pthread.h>
 
 #define ASSERT(X) if(!(X)) { CURRENT_PROCESS_DEBUG("EXCEPTION: " << #X); throw std::runtime_error(#X); }
+#define ASSERT_INT_FUNCTION_FOR_ZERO(X, ...) int result = X; if (result == 0) {__VA_ARGS__; CURRENT_PROCESS_DEBUG(#X << " failed with code " << result); ASSERT(reslt != 0);}
 
 #define PROCESS_DEBUG(PID, MESSAGE) std::cout << "Process PID = " << PID << ": " << MESSAGE << std::endl
 #define CURRENT_PROCESS_DEBUG(MESSAGE) PROCESS_DEBUG(pthread_self(), MESSAGE)

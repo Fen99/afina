@@ -103,10 +103,14 @@ bool Worker::_WriteToSocket(int epoll, ClientAndExecutor& client_executor) {
 		client_executor.executor.RemoveFromOutput(io_information.result);
 	}
 	
-	epoll_event socket_event = {};
-	socket_event.data.fd = client_executor.client.GetID();
-	socket_event.events = EPOLLIN;
-	VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_MOD, client_executor.client.GetID(), &socket_event));
+	//Server is finishing
+	if (epoll != 0) {
+		epoll_event socket_event = {};
+		socket_event.data.fd = client_executor.client.GetID();
+		socket_event.events = EPOLLIN;
+		VALIDATE_NETWORK_FUNCTION(epoll_ctl(epoll, EPOLL_CTL_MOD, client_executor.client.GetID(), &socket_event));
+	}
+
 	return true;
 }
 
@@ -186,6 +190,11 @@ void Worker::_ThreadFunction() {
 				}
 			}
 		}
+	}
+
+	// The last attempt write to clients
+	for (auto it = _clients.begin(); it != _clients.end(); it++) {
+		_WriteToSocket(0, it->second);
 	}
 	
 	_clients.clear();
