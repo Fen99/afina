@@ -19,7 +19,7 @@ class MapBasedGlobalLockImpl : public MapBasedImplementation {
 public:
 	//max_size - in bytes
 	MapBasedGlobalLockImpl(size_t max_size = std::numeric_limits<int>::max());
-	~MapBasedGlobalLockImpl();
+	virtual ~MapBasedGlobalLockImpl();
 
     // Implements Afina::Storage interface
     bool Put(const std::string &key, const std::string &value) override;

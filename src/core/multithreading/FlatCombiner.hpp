@@ -6,6 +6,7 @@
 #include <atomic>
 #include <thread>
 #include <array>
+#include <algorithm>
 
 #include "ThreadLocalPointer.hpp"
 
@@ -37,7 +38,7 @@ class FlatCombiner {
 				T _data_for_operation;
 
 			public:
-				OperationWrapper() : _state(COMPLETE), _result(false), _exc(nullptr) {}
+				OperationWrapper() : _state(State::COMPLETE), _exc(nullptr) {}
 		
 				bool IsExecutable() const {
 					return _state.load(std::memory_order_relaxed) == State::READY_FOR_EXECUTE;
@@ -55,7 +56,7 @@ class FlatCombiner {
 				}
 
 				void OnExecutionStart() {
-					bool expected = State::READY_FOR_EXECUTE;
+					State expected = State::READY_FOR_EXECUTE;
 					if (!_state.compare_exchange_strong(expected, State::EXECUTION, std::memory_order_acquire)) {
 						ASSERT(expected == State::EXECUTION); //for case if this method will be called from combiner
 					}
@@ -63,7 +64,7 @@ class FlatCombiner {
 
 				void OnExecutionComplete(std::exception_ptr exc) {
 					_exc = exc;
-					bool expected = State::EXECUTION;
+					State expected = State::EXECUTION;
 					ASSERT(_state.compare_exchange_strong(expected, State::COMPLETE, std::memory_order_release)); //saves changes and _exc
 				}
 
@@ -103,7 +104,7 @@ class FlatCombiner {
 				// link left and slot could be deleted
 				std::atomic<size_t> _next_and_alive;
 
-				static bool _CheckValueForAvaliability(size_t val) const {
+				static bool _CheckValueForAvaliability(size_t val) {
 					return ((bool) (val & _ALIVE_MASK));
 				}
 
@@ -176,9 +177,11 @@ class FlatCombiner {
 		 * @param Combine function that aplly pending operations onto some data structure. It accepts array
 		 * of pending ops and allowed to modify it in any way except delete pointers
 		 */
-		FlatCombiner(std::function<void(FlatCombinerShotArrayType&)>& combiner, uint64_t saving_time = 100000, bool need_sort_shot = true) :
+		FlatCombiner(const std::function<void(FlatCombinerShotArrayType&)>& combiner, uint64_t saving_time = 100000, bool need_sort_shot = true) :
 			_slot(nullptr, _OrphanSlot), _technical_element(new OpNode), _lock(1), _saving_time(saving_time), _combiner(combiner), _is_alive(true)
-		{}
+		{
+			_queue.store(_technical_element, std::memory_order_relaxed);
+		}
 
 		~FlatCombiner() { 
 			DestroyCombiner();
@@ -195,9 +198,9 @@ class FlatCombiner {
 			OpNode* curr_element = _queue.load(std::memory_order_relaxed);
 			while (!_queue.compare_exchange_weak(curr_element, nullptr, std::memory_order_relaxed)); //try to set nullptr to the head of queue => prevent insert
 			while (curr_element != _technical_element) {
-				if (curr_slot->operation.IsExecutable()) {
+				if (curr_element->operation.IsExecutable()) {
 					curr_element->operation.OnExecutionStart(); //sets fence
-					curr_element->operation.OnExecutionComplete(new std::exception("FlatCombine object is destroying!"));
+					curr_element->operation.OnExecutionComplete(std::make_exception_ptr(std::runtime_error("FlatCombine object is destroying!")));
 				}
 
 				OpNode* next_element = curr_element->Next();
@@ -235,11 +238,12 @@ class FlatCombiner {
 					if (curr_slot->Next() == nullptr) { _InsertSlot(curr_slot); } //We have full control, so this check will be reliable
 					_ExecutorFunction(epoch);
 					_Unlock();
+					break;
 				}
 				else {
 					if (curr_slot->operation.IsComplete()) {
 						std::atomic_thread_fence(std::memory_order_acquire); //for read changes
-						return;
+						break;
 					}
 					else {
 						//Check if we are in queue. If we are not an executor, purging should finish in some time
@@ -293,15 +297,15 @@ class FlatCombiner {
 			size_t position = 0;
 			while (curr_element != _technical_element) {
 				if (!curr_element->IsAlive() || (epoch - curr_element->last_active.load(std::memory_order_relaxed) > _saving_time && 
-												 !curr_slot->operation.IsExecutable())) {
+						                 !curr_element->operation.IsExecutable())) {
 					OpNode* next_element = curr_element->Next();
 					_DequeueSlot(parent, curr_element);
 					curr_element = next_element;
 					continue;
 				}
 
-				if (curr_slot->operation.IsExecutable()) {
-					combine_shot[position] = curr_element->operation;
+				if (curr_element->operation.IsExecutable()) {
+					combine_shot[position] = &curr_element->operation;
 					++position;
 					curr_element->last_active.store(epoch, std::memory_order_relaxed);
 					curr_element->operation.OnExecutionStart(); //sets fence
@@ -361,8 +365,8 @@ class FlatCombiner {
 			ASSERT(_queue.load(std::memory_order_relaxed) != nullptr); //flat combine was destructed
 			ASSERT(slot->Next() == nullptr); //We cannot insert slot that is already in queue
 
-			uint64_t last_active = curr_slot->last_active.load(std::memory_order_relaxed);
-			ASSERT(curr_slot->last_active.compare_exchange_strong(last_active, 0, std::memory_order_relaxed)); //mark that slot is new
+			uint64_t last_active = slot->last_active.load(std::memory_order_relaxed);
+			ASSERT(slot->last_active.compare_exchange_strong(last_active, 0, std::memory_order_relaxed)); //mark that slot is new
 
 			OpNode* current_head = _queue.load(std::memory_order_relaxed);
 			do {
@@ -383,12 +387,16 @@ class FlatCombiner {
 			ASSERT(_IsLocked());
 			ASSERT(slot2remove != _technical_element); //We cannot delete the last element
 			ASSERT(slot2remove->Next() != nullptr);
+			ASSERT(parent != slot2remove);
+
+			CURRENT_PROCESS_DEBUG("Delete slot from flat combiner: " << "parent = " << parent << "; slot2remove: " << slot2remove << "; head = " << _queue.load() << std::endl);
 
 			//purging the head of queue in destructor
 			if (parent == nullptr && _queue.load(std::memory_order_relaxed) == nullptr) {
 				if (!slot2remove->TryPurge()) {
 					delete slot2remove;
 				}
+				return;
 			}
 
 			if (parent == nullptr) { //removes the head
@@ -399,16 +407,16 @@ class FlatCombiner {
 					while (current->Next() != slot2remove) {
 						ASSERT(current->Next() != _technical_element); //slot2remove should be in queue
 					}
-					_DequeueSlot(current, slot2remove, std::memory_order_relaxed);
+					_DequeueSlot(current, slot2remove);
 					return;
 				}
 			}
 			else {
 				ASSERT(parent->Next() != nullptr); //We cannot use this function for purged nodes
 
-				if (!parent->SetNext(slot2remove->Next()), true) { //true parameter: we allow parent to be invalidated
+				if (!parent->SetNext(slot2remove->Next(), true)) { //true parameter: we allow parent to be invalidated
 					ASSERT(!parent->IsAlive()); //only one correct case: parent was invalidated in this moment
-					ASSERT(parent->SetNext(slot2remove->Next()), true);
+					ASSERT(parent->SetNext(slot2remove->Next(), true));
 				}
 			}
 
@@ -424,10 +432,11 @@ class FlatCombiner {
 		 *
 		 * @param OpNode pointer to the slot is being to orphan
 		 */
-		static void _OrphanSlot(OpNode* node) {
-			ASSERT(node != nullptr); //null slot cannot be deleted
-			if (!node->Invalidate()) {
-				delete node;
+		static void _OrphanSlot(void* node) {
+			OpNode* curr_node = static_cast<OpNode*>(node);
+			ASSERT(curr_node != nullptr); //null slot cannot be deleted
+			if (!curr_node->Invalidate()) {
+				delete curr_node;
 			}
 		}
 
@@ -456,7 +465,7 @@ class FlatCombiner {
 
 		// Slot of the current thread. If nullptr then cur thread gets access in the
 		// first time or after a long period when slot has been deleted already
-		ThreadLocal<OpNode> _slot;
+		ThreadLocalPonter<OpNode> _slot;
 
 		//Count of epochs before purging
 		uint64_t _saving_time;

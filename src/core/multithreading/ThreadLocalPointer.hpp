@@ -12,23 +12,20 @@ template <typename T>
 class ThreadLocalPonter
 {
 public:
-	ThreadLocalPonter(T* initial = nullptr, std::function<void(T*)> destructor = nullptr) {
-		ASSERT_INT_FUNCTION_FOR_ZERO(pthread_key_create(&_key, destructor), _key = 0);
+	ThreadLocalPonter(T* initial, std::function<void(void*)> destructor) {
+		ASSERT_INT_FUNCTION_FOR_ZERO(pthread_key_create(&_key, destructor.target<void(void*)>()), _key = 0);
 		set(initial);
 	}
 
 	inline T* get() const {
-		ASSERT(_key != 0);
-		return pthread_getspecific(_key);
+		return static_cast<T*>(pthread_getspecific(_key));
 	}
 
 	inline void set(T* val) {
-		ASSERT(_key != 0);
-		ASSERT_INT_FUNCTION_FOR_ZERO(pthread_setspecific(_key, val));
+		ASSERT_INT_FUNCTION_FOR_ZERO(pthread_setspecific(_key, (void*) val));
 	}
 
 	T& operator*() const { 
-		ASSERT(_key != 0);
 		return *get();
 	}
 

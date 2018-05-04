@@ -12,7 +12,7 @@
 #include <afina/core/Debug.h>
 #include "./../../protocol/Parser.h"
 #include <afina/execute/Command.h>
-#include "./../../core/ThreadPool.h"
+#include "./../../core/multithreading/ThreadPool.h"
 #include "./../core/Socket.h"
 
 

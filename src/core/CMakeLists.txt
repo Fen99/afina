@@ -1,6 +1,6 @@
 # build service
 set(SOURCE_FILES
-    ThreadPool.cpp
+    multithreading/ThreadPool.cpp
     FileDescriptor.cpp
 )
 

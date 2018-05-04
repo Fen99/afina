@@ -15,6 +15,7 @@
 #include "network/nonblocking/ServerImpl.h"
 #include "network/uv/ServerImpl.h"
 #include "storage/MapBasedGlobalLockImpl.h"
+#include "storage/MapBasedFCImpl.h"
 
 typedef struct {
     std::shared_ptr<Afina::Storage> storage;
@@ -79,7 +80,8 @@ int main(int argc, char **argv) {
     if (storage_type == "map_global") {
         app.storage = std::make_shared<Afina::Backend::MapBasedGlobalLockImpl>();
     } else {
-        throw std::runtime_error("Unknown storage type");
+        if (storage_type == "fc_storage") { app.storage = std::make_shared<Afina::Backend::MapBasedFCImpl>(); }
+	else { throw std::runtime_error("Unknown storage type"); }
     }
 
     // Build  & start network layer

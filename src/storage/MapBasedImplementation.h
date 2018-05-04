@@ -57,7 +57,7 @@ private:
 
 protected:
 	MapBasedImplementation(size_t max_size = std::numeric_limits<int>::max());
-	~MapBasedImplementation();
+	virtual ~MapBasedImplementation();
 
     // Implements Afina::Storage interface
     virtual bool Put(const std::string &key, const std::string &value) override;

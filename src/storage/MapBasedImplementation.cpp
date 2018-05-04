@@ -41,7 +41,6 @@ bool MapBasedImplementation::_Insert(const std::string &key, const std::string &
 	if (position == _backend.end())
 	{
 		if (size_new + _current_size > _max_size) { _ShrinkToSize(_max_size - size_new); }
-
 		Entry* new_element = new Entry(key, value, nullptr, _first);
 		if (_first != nullptr) { _first->previous = new_element; }
 		_first = new_element;
@@ -53,7 +52,7 @@ bool MapBasedImplementation::_Insert(const std::string &key, const std::string &
 	else
 	{
 		if (need_replace == false) { return false; }
-		return Set(key, value);
+		return MapBasedImplementation::Set(key, value);
 	}
 
 	return true;

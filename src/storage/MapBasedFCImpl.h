@@ -59,7 +59,7 @@ class MapBasedFCImpl : public MapBasedImplementation {
 	public:
 		//max_size - in bytes
 		MapBasedFCImpl(size_t max_size = std::numeric_limits<int>::max());
-		~MapBasedFCImpl();
+		virtual ~MapBasedFCImpl();
 
 		// Implements Afina::Storage interface
 		bool Put(const std::string &key, const std::string &value) override;

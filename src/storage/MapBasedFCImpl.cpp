@@ -23,7 +23,7 @@ MapBasedFCImpl::Operations::Operations() {
 		{ container.MapBasedImplementation::Print(); };
 }
 
-MapBasedFCImpl::MapBasedFCImpl(size_t max_size) : MapBasedImplementation(max_size), _flat_combiner(std::bind(&MapBasedFCImpl::_Combiner, this, _1))
+MapBasedFCImpl::MapBasedFCImpl(size_t max_size) : MapBasedImplementation(max_size), _flat_combiner(std::bind(&MapBasedFCImpl::_Combiner, this, _1), 0)
 {}
 
 MapBasedFCImpl::~MapBasedFCImpl() {
