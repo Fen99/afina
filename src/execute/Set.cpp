@@ -8,13 +8,18 @@ namespace Execute {
 
 // memcached protocol: "set" means "store this data".
 void Set::Execute(Storage &storage, const std::string &args, std::string &out) const {
-	InsertCommand::Execute(storage, args, out); //checks data len
+    InsertCommand::Execute(storage, args, out); // checks data len
 
     std::cout << "Set(" << _key << "): " << args << std::endl;
-	if (!storage.Put(_key, args)) { out = "NOT_STORED"; }
-    else						  { out = "STORED";     }
+    if (!storage.Put(_key, args)) {
+        out = "NOT_STORED";
+    } else {
+        out = "STORED";
+    }
 
-	if (_no_reply) { out.clear(); }
+    if (_no_reply) {
+        out.clear();
+    }
 }
 
 } // namespace Execute

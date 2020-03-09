@@ -20,62 +20,58 @@ class Engine final {
 private:
     // 0 - not init yet, >0 from higher to lower, <0 - from lower to higher
     static int _stack_direction;
-    
+
     /**
      * A single coroutine instance which could be scheduled for execution
      * should be allocated on heap
      */
     typedef struct context {
-	private:
-        	char* _low = nullptr;
-        	char* _hight = nullptr;
-	
-	public:
-		// Methods for cross-platform independence (for direction of stack adresses). StartAddress - position of stack on function start, EndAddress - on Store() command
-		// Low() is always lower then Hight()
-		char* Low()   { return _low;   }
-		char* Hight() { return _hight; }
+    private:
+        char *_low = nullptr;
+        char *_hight = nullptr;
 
-		void SetStartAddress(char* addr) {
-			ASSERT(Engine::_stack_direction != 0);
-			if (Engine::_stack_direction > 0) {
-				_hight = addr;
-			}
-			else {
-				_low = addr;
-			}
-		}
+    public:
+        // Methods for cross-platform independence (for direction of stack adresses). StartAddress - position of stack
+        // on function start, EndAddress - on Store() command Low() is always lower then Hight()
+        char *Low() { return _low; }
+        char *Hight() { return _hight; }
 
-		void SetEndAddress(char* addr) {
-			ASSERT(Engine::_stack_direction != 0);
-			if (Engine::_stack_direction > 0) {
-				_low = addr;
-			}
-			else {
-				_hight = addr;
-			}
-		}
+        void SetStartAddress(char *addr) {
+            ASSERT(Engine::_stack_direction != 0);
+            if (Engine::_stack_direction > 0) {
+                _hight = addr;
+            } else {
+                _low = addr;
+            }
+        }
 
-	        // coroutine stack copy buffer
-        	char* Stack = nullptr;
+        void SetEndAddress(char *addr) {
+            ASSERT(Engine::_stack_direction != 0);
+            if (Engine::_stack_direction > 0) {
+                _low = addr;
+            } else {
+                _hight = addr;
+            }
+        }
 
-	        // Saved coroutine context (registers)
-        	jmp_buf Environment;
+        // coroutine stack copy buffer
+        char *Stack = nullptr;
 
-	        // To include routine in the different lists, such as "alive", "blocked", e.t.c
-        	struct context *prev = nullptr;
-	        struct context *next = nullptr;
-	
-		void RemoveStack() {
-			if (Stack != nullptr) {
-				free((void*) Stack); //because calloc was used
-				Stack = nullptr;
-			}	
-		}
+        // Saved coroutine context (registers)
+        jmp_buf Environment;
 
-		~context() {
-			RemoveStack();
-		}
+        // To include routine in the different lists, such as "alive", "blocked", e.t.c
+        struct context *prev = nullptr;
+        struct context *next = nullptr;
+
+        void RemoveStack() {
+            if (Stack != nullptr) {
+                free((void *)Stack); // because calloc was used
+                Stack = nullptr;
+            }
+        }
+
+        ~context() { RemoveStack(); }
     } context;
 
     /**
@@ -112,21 +108,23 @@ protected:
     /**
      * Rewinds stack upper the new corutine position
      */
-    void _Rewind(context& new_ctx);
+    void _Rewind(context &new_ctx);
 
-    static void _SetStackDirection(char* caller_addr) {
-	if (_stack_direction != 0) { return; }
+    static void _SetStackDirection(char *caller_addr) {
+        if (_stack_direction != 0) {
+            return;
+        }
 
-	char stack_position = 0;
-        _stack_direction = ((size_t) caller_addr) - ((size_t) &stack_position); //>0 - from higer to lower
+        char stack_position = 0;
+        _stack_direction = ((size_t)caller_addr) - ((size_t)&stack_position); //>0 - from higer to lower
     }
 
 public:
     Engine() : StackBottom(0), cur_routine(nullptr), alive(nullptr) {
-	char stack_position = 0;
+        char stack_position = 0;
         _SetStackDirection(&stack_position);
     }
-    
+
     Engine(Engine &&) = delete;
     Engine(const Engine &) = delete;
 
@@ -169,38 +167,39 @@ public:
         // Start routine execution
         void *pc = run(main, std::forward<Ta>(args)...);
         idle_ctx = new context();
-	idle_ctx->SetStartAddress(StackBottom); //args of start function have already passed to "run", in this function they not needed
-	cur_routine = idle_ctx;
+        idle_ctx->SetStartAddress(
+            StackBottom); // args of start function have already passed to "run", in this function they not needed
+        cur_routine = idle_ctx;
 
         if (setjmp(idle_ctx->Environment) > 0) {
             // Here: correct finish of the coroutine section
-	    yield();
+            yield();
         } else if (pc != nullptr) {
-            Store(*idle_ctx); //not critical: we can pass stack saving here, we need only Environment
+            Store(*idle_ctx); // not critical: we can pass stack saving here, we need only Environment
             sched(pc);
         }
 
         // Shutdown runtime
         delete idle_ctx;
-	idle_ctx = nullptr;
+        idle_ctx = nullptr;
 
-	cur_routine = nullptr;
+        cur_routine = nullptr;
         this->StackBottom = 0;
     }
 
 public:
-	//Wrapper of _run. Allows to save coroutine bottom address
-	template <typename... Ta> void *run(void(*func)(Ta...), Ta &&... args){
-		char coroutine_start = 0;
-		_run(&coroutine_start, func, std::forward<Ta>(args)...);
-	}
+    // Wrapper of _run. Allows to save coroutine bottom address
+    template <typename... Ta> void *run(void (*func)(Ta...), Ta &&... args) {
+        char coroutine_start = 0;
+        _run(&coroutine_start, func, std::forward<Ta>(args)...);
+    }
 
 protected:
     /**
      * Register new coroutine. It won't receive control until scheduled explicitely or implicitly. In case of some
      * errors function returns -1
      */
-    template <typename... Ta> void *_run(char* bottom, void (*func)(Ta...), Ta &&... args) {
+    template <typename... Ta> void *_run(char *bottom, void (*func)(Ta...), Ta &&... args) {
         if (this->StackBottom == 0) {
             // Engine wasn't initialized yet
             return nullptr;
@@ -208,7 +207,7 @@ protected:
 
         // New coroutine context that carries around all information enough to call function
         context *pc = new context();
-	pc->SetStartAddress(bottom);
+        pc->SetStartAddress(bottom);
 
         // Store current state right here, i.e just before enter new coroutine, later, once it gets scheduled
         // execution starts here. Note that we have to acquire stack of the current function call to ensure

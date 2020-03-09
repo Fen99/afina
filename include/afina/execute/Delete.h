@@ -20,7 +20,7 @@ private:
     std::string _key;
 
 public:
-    bool ExtractArguments(std::string& args_str) override;
+    bool ExtractArguments(std::string &args_str) override;
 
     void Execute(Storage &storage, const std::string &args, std::string &out) const override;
 };

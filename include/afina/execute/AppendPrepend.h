@@ -22,8 +22,9 @@ namespace Execute {
 class AppendPrepend : public InsertCommand {
 protected:
     bool _type;
+
 public:
-    //true - append, false - prepend
+    // true - append, false - prepend
     AppendPrepend(bool type) : _type(type) {}
 
     void Execute(Storage &storage, const std::string &args, std::string &out) const override;

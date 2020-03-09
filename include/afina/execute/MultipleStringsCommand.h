@@ -19,7 +19,7 @@ protected:
 public:
     inline const std::vector<std::string> &strings() const { return _strings; }
 
-    bool ExtractArguments(std::string& args_str) override;
+    bool ExtractArguments(std::string &args_str) override;
 
 protected:
     std::vector<std::string> _strings;
