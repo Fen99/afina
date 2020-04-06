@@ -11,5 +11,6 @@ config/_local.conf
 
 # cquery
 .vscode
+.vs
 compile_commands.json
 cquery_log.txt

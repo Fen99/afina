@@ -2,11 +2,11 @@
 #define AFINA_STORAGE_MAP_BASED_FC_IMPL_H
 
 #include <array>
-#include <functional>
 #include <exception>
+#include <functional>
 
-#include "MapBasedImplementation.h"
 #include "./../core/multithreading/FlatCombiner.hpp"
+#include "MapBasedImplementation.h"
 #include <afina/core/Debug.h>
 
 namespace Afina {
@@ -21,73 +21,71 @@ namespace Backend {
 using namespace std::placeholders;
 
 class MapBasedFCImpl : public MapBasedImplementation {
-	private:
-		enum OperationTypes
-		{
-			PUT = 0,
-			PUT_IF_ABSENT = 1,
-			SET = 2,
-			DELETE = 3,
-			GET = 4,
-			PRINT = 5,
-			
-			CountOfTypes = 6
-		};
+private:
+    enum OperationTypes {
+        PUT = 0,
+        PUT_IF_ABSENT = 1,
+        SET = 2,
+        DELETE = 3,
+        GET = 4,
+        PRINT = 5,
 
-		struct DataForSlot {
-			OperationTypes type;
-			std::string key;
-			std::string value;
+        CountOfTypes = 6
+    };
 
-			bool result;
+    struct DataForSlot {
+        OperationTypes type;
+        std::string key;
+        std::string value;
 
-			//is needed from flat combiner
-			bool operator<(const DataForSlot& data2) {
-				return key < data2.key;
-			}
-		};
+        bool result;
 
-	private:
-		using CombinerType = Core::FlatCombiner<DataForSlot>;
+        // is needed from flat combiner
+        bool operator<(const DataForSlot &data2) { return key < data2.key; }
+    };
 
-	private:
-		struct Operations {
-			std::array<std::function<void(MapBasedFCImpl&, CombinerType::OperationWrapperPtr)>, OperationTypes::CountOfTypes> operations;
-			Operations();
-		} _operations; //Static constructible object
+private:
+    using CombinerType = Core::FlatCombiner<DataForSlot>;
 
-	public:
-		//max_size - in bytes
-		MapBasedFCImpl(size_t max_size = std::numeric_limits<int>::max());
-		virtual ~MapBasedFCImpl();
+private:
+    struct Operations {
+        std::array<std::function<void(MapBasedFCImpl &, CombinerType::OperationWrapperPtr)>,
+                   OperationTypes::CountOfTypes>
+            operations;
+        Operations();
+    } _operations; // Static constructible object
 
-		// Implements Afina::Storage interface
-		bool Put(const std::string &key, const std::string &value) override;
+public:
+    // max_size - in bytes
+    MapBasedFCImpl(size_t max_size = std::numeric_limits<int>::max());
+    virtual ~MapBasedFCImpl();
 
-		// Implements Afina::Storage interface
-		bool PutIfAbsent(const std::string &key, const std::string &value) override;
+    // Implements Afina::Storage interface
+    bool Put(const std::string &key, const std::string &value) override;
 
-		// Implements Afina::Storage interface
-		bool Set(const std::string &key, const std::string &value) override;
+    // Implements Afina::Storage interface
+    bool PutIfAbsent(const std::string &key, const std::string &value) override;
 
-		// Implements Afina::Storage interface
-		bool Delete(const std::string &key) override;
+    // Implements Afina::Storage interface
+    bool Set(const std::string &key, const std::string &value) override;
 
-		// Implements Afina::Storage interface
-		bool Get(const std::string &key, std::string &value) override;
+    // Implements Afina::Storage interface
+    bool Delete(const std::string &key) override;
 
-		void Print();
+    // Implements Afina::Storage interface
+    bool Get(const std::string &key, std::string &value) override;
 
-	private:
-		CombinerType _flat_combiner;
+    void Print();
 
-	private:
-		void _Combiner(CombinerType::FlatCombinerShotArrayType& arr);
-		bool _PrepareAndApplySlot(OperationTypes type, const std::string& key, const std::string& value);
+private:
+    CombinerType _flat_combiner;
+
+private:
+    void _Combiner(CombinerType::FlatCombinerShotArrayType &arr);
+    bool _PrepareAndApplySlot(OperationTypes type, const std::string &key, const std::string &value);
 };
 
 } // namespace Backend
 } // namespace Afina
-
 
 #endif // AFINA_STORAGE_MAP_BASED_FC_IMPL_H

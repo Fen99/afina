@@ -1,22 +1,22 @@
 #ifndef AFINA_NETWORK_NONBLOCKING_WORKER_H
 #define AFINA_NETWORK_NONBLOCKING_WORKER_H
 
+#include <atomic>
+#include <exception>
+#include <functional>
 #include <memory>
 #include <thread>
-#include <atomic>
 #include <unordered_map>
-#include <exception>
 #include <utility>
-#include <functional>
 
+#include <errno.h>
 #include <signal.h>
 #include <sys/epoll.h>
 #include <sys/types.h>
-#include <errno.h>
 
 #include "./../../protocol/Executor.h"
-#include "./../core/ServerSocket.h"
 #include "./../core/ClientSocket.h"
+#include "./../core/ServerSocket.h"
 
 namespace Afina {
 
@@ -60,40 +60,38 @@ public:
     int GetThreadId() { return _thread.native_handle(); }
 
 private:
-	enum class STATE {
-		STOPPED,
-		STOPPING,
-		WORKS
-	};
+    enum class STATE { STOPPED, STOPPING, WORKS };
 
-	struct ClientAndExecutor {
-		ClientSocket client;
-		Protocol::Executor executor;
+    struct ClientAndExecutor {
+        ClientSocket client;
+        Protocol::Executor executor;
 
-		ClientAndExecutor(ClientSocket&& client_socket, std::shared_ptr<Afina::Storage> storage) : client(std::move(client_socket)), executor(storage)									{}
-	};
+        ClientAndExecutor(ClientSocket &&client_socket, std::shared_ptr<Afina::Storage> storage)
+            : client(std::move(client_socket)), executor(storage) {}
+    };
 
 private:
-        /**
-        * Method executing by background thread
-	*/
-    	void _ThreadWrapper(); //For exeptions
-	void _ThreadFunction();
+    /**
+     * Method executing by background thread
+     */
+    void _ThreadWrapper(); // For exeptions
+    void _ThreadFunction();
 
-	static void _SignalHandler(int signal);
+    static void _SignalHandler(int signal);
 
-	bool _ReadFromSocket(int epoll, ClientAndExecutor& client_executor);
-	bool _WriteToSocket(int epoll, ClientAndExecutor& client_executor);
+    bool _ReadFromSocket(int epoll, ClientAndExecutor &client_executor);
+    bool _WriteToSocket(int epoll, ClientAndExecutor &client_executor);
 
 private:
-	std::thread _thread;
-	std::atomic<STATE> _current_state; //independend on server state, because has Stop() function. atomic - can be changed out from _thread
+    std::thread _thread;
+    std::atomic<STATE> _current_state; // independend on server state, because has Stop() function. atomic - can be
+                                       // changed out from _thread
 
-	std::shared_ptr<ServerSocket> _server_socket;
-	std::unordered_map<int, ClientAndExecutor> _clients;
-	size_t _max_listeners;
+    std::shared_ptr<ServerSocket> _server_socket;
+    std::unordered_map<int, ClientAndExecutor> _clients;
+    size_t _max_listeners;
 
-	std::shared_ptr<Afina::Storage> _storage;
+    std::shared_ptr<Afina::Storage> _storage;
 };
 
 } // namespace NonBlocking

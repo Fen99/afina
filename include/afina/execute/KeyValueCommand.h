@@ -17,8 +17,8 @@ class KeyValueCommand : public Command {
 protected:
     KeyValueCommand() : _value(-1) {}
 
-public:	
-    bool ExtractArguments(std::string& args_str) override;
+public:
+    bool ExtractArguments(std::string &args_str) override;
 
 protected:
     std::string _key;

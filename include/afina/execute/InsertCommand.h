@@ -17,9 +17,9 @@ class InsertCommand : public Command {
 protected:
     InsertCommand() : _flags(0), _expire(-1) {}
 
-public:	
-    bool ExtractArguments(std::string& args_str) override;
-    virtual void Execute(Storage &storage, const std::string& data, std::string &out) const override;	
+public:
+    bool ExtractArguments(std::string &args_str) override;
+    virtual void Execute(Storage &storage, const std::string &data, std::string &out) const override;
 
     inline const std::string &key() const { return _key; }
     inline const uint32_t flags() const { return _flags; }

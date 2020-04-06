@@ -96,5 +96,5 @@ TEST(MemcachedParserTest, Stats) {
     ASSERT_EQ(0, value_size);
 
     Execute::Stats *tmp = reinterpret_cast<Execute::Stats *>(cmd.get());
-	ASSERT_FALSE(tmp == nullptr);
+    ASSERT_FALSE(tmp == nullptr);
 }

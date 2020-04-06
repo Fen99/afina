@@ -5,8 +5,8 @@
 
 #include <afina/network/Server.h>
 
-#include "Worker.h"
 #include "./../core/ServerSocket.h"
+#include "Worker.h"
 
 namespace Afina {
 namespace Network {
